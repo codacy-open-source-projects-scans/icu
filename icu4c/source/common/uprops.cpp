@@ -544,6 +544,14 @@ static int32_t biDiGetMaxValue(const IntProperty &/*prop*/, UProperty which) {
     return ubidi_getMaxValue(which);
 }
 
+static int32_t getBlock(const IntProperty &/*prop*/, UChar32 c, UProperty /*which*/) {
+    return (int32_t)ublock_getCode(c);
+}
+
+static int32_t blockGetMaxValue(const IntProperty &/*prop*/, UProperty /*which*/) {
+    return uprv_getMaxValues(UPROPS_MAX_VALUES_OTHER_INDEX) & UPROPS_MAX_BLOCK;
+}
+
 #if UCONFIG_NO_NORMALIZATION
 static int32_t getCombiningClass(const IntProperty &, UChar32, UProperty) {
     return 0;
@@ -577,13 +585,16 @@ static int32_t getScript(const IntProperty &/*prop*/, UChar32 c, UProperty /*whi
 }
 
 static int32_t scriptGetMaxValue(const IntProperty &/*prop*/, UProperty /*which*/) {
-    uint32_t scriptX=uprv_getMaxValues(0)&UPROPS_SCRIPT_X_MASK;
-    return uprops_mergeScriptCodeOrIndex(scriptX);
+    return uprv_getMaxValues(0)&UPROPS_MAX_SCRIPT;
 }
 
 /*
  * Map some of the Grapheme Cluster Break values to Hangul Syllable Types.
- * Hangul_Syllable_Type is fully redundant with a subset of Grapheme_Cluster_Break.
+ * Hangul_Syllable_Type is redundant with a subset of Grapheme_Cluster_Break.
+ *
+ * Starting with Unicode 16, there is an exception:
+ * Some Kirat Rai vowels are given GCB=V for proper grapheme clustering, but
+ * they are of course not related to Hangul syllables.
  */
 static const UHangulSyllableType gcbToHst[]={
     U_HST_NOT_APPLICABLE,   /* U_GCB_OTHER */
@@ -603,6 +614,11 @@ static const UHangulSyllableType gcbToHst[]={
 };
 
 static int32_t getHangulSyllableType(const IntProperty &/*prop*/, UChar32 c, UProperty /*which*/) {
+    // Ignore supplementary code points: They all have HST=NA.
+    // This is a simple way to handle the GCB!=hst cases since Unicode 16 (Kirat Rai vowels).
+    if(c>0xffff) {
+        return U_HST_NOT_APPLICABLE;
+    }
     /* see comments on gcbToHst[] above */
     int32_t gcb=(int32_t)(u_getUnicodeProperties(c, 2)&UPROPS_GCB_MASK)>>UPROPS_GCB_SHIFT;
     if(gcb<UPRV_LENGTHOF(gcbToHst)) {
@@ -683,7 +699,7 @@ static const IntProperty intProps[UCHAR_INT_LIMIT-UCHAR_INT_START]={
      * For them, column is the UPropertySource value.
      */
     { UPROPS_SRC_BIDI,  0, 0,                               getBiDiClass, biDiGetMaxValue },
-    { 0,                UPROPS_BLOCK_MASK, UPROPS_BLOCK_SHIFT, defaultGetValue, defaultGetMaxValue },
+    { UPROPS_SRC_BLOCK, 0, 0,                               getBlock, blockGetMaxValue },
     { UPROPS_SRC_NFC,   0, 0xff,                            getCombiningClass, getMaxValueFromShift },
     { 2,                UPROPS_DT_MASK, 0,                  defaultGetValue, defaultGetMaxValue },
     { 0,                UPROPS_EA_MASK, UPROPS_EA_SHIFT,    defaultGetValue, defaultGetMaxValue },
