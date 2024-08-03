@@ -11,6 +11,7 @@
 #define ULOCIMP_H
 
 #include <cstddef>
+#include <string_view>
 
 #include "unicode/bytestream.h"
 #include "unicode/uloc.h"
@@ -95,12 +96,12 @@ ulocimp_canonicalize(const char* localeID,
 
 U_EXPORT icu::CharString
 ulocimp_getKeywordValue(const char* localeID,
-                        const char* keywordName,
+                        std::string_view keywordName,
                         UErrorCode& status);
 
 U_EXPORT void
 ulocimp_getKeywordValue(const char* localeID,
-                        const char* keywordName,
+                        std::string_view keywordName,
                         icu::ByteSink& sink,
                         UErrorCode& status);
 
@@ -398,10 +399,10 @@ U_EXPORT const char*
 ulocimp_toLegacyKey(const char* key);
 
 U_EXPORT const char*
-ulocimp_toBcpType(const char* key, const char* type, bool* isKnownKey, bool* isSpecialType);
+ulocimp_toBcpType(const char* key, const char* type);
 
 U_EXPORT const char*
-ulocimp_toLegacyType(const char* key, const char* type, bool* isKnownKey, bool* isSpecialType);
+ulocimp_toLegacyType(const char* key, const char* type);
 
 /* Function for testing purpose */
 U_EXPORT const char* const*

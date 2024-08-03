@@ -2802,6 +2802,21 @@ TestAdditionalProperties(void) {
         { 0x0606, UCHAR_PREPENDED_CONCATENATION_MARK, false },
         { 0x110BD, UCHAR_PREPENDED_CONCATENATION_MARK, true },
 
+        /* Indic_Conjunct_Break values */
+        { 0x094D, UCHAR_INDIC_CONJUNCT_BREAK, U_INCB_LINKER },
+        { 0x09B9, UCHAR_INDIC_CONJUNCT_BREAK, U_INCB_CONSONANT },
+        { 0x05BE, UCHAR_INDIC_CONJUNCT_BREAK, U_INCB_NONE },
+        { 0x05BF, UCHAR_INDIC_CONJUNCT_BREAK, U_INCB_EXTEND },
+        { 0x05C0, UCHAR_INDIC_CONJUNCT_BREAK, U_INCB_NONE },
+        { 0xD800, UCHAR_INDIC_CONJUNCT_BREAK, U_INCB_NONE },
+
+        /* Modifier_Combining_Mark values */
+        { 0xD800, UCHAR_MODIFIER_COMBINING_MARK, false },
+        { 0x0653, UCHAR_MODIFIER_COMBINING_MARK, false },
+        { 0x0654, UCHAR_MODIFIER_COMBINING_MARK, true },
+        { 0x0655, UCHAR_MODIFIER_COMBINING_MARK, true },
+        { 0x0656, UCHAR_MODIFIER_COMBINING_MARK, false },
+
         /* undefined UProperty values */
         { 0x61, 0x4a7, 0 },
         { 0x234bc, 0x15ed, 0 }

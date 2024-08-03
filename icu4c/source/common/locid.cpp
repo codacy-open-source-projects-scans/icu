@@ -1570,7 +1570,7 @@ AliasReplacer::replaceTransformedExtensions(
              // Split the "tkey-tvalue" pair string so that we can canonicalize the tvalue.
              *const_cast<char*>(tvalue++) = '\0'; // NUL terminate tkey
              output.append(tfield, status).append('-', status);
-             const char* bcpTValue = ulocimp_toBcpType(tfield, tvalue, nullptr, nullptr);
+             const char* bcpTValue = ulocimp_toBcpType(tfield, tvalue);
              output.append((bcpTValue == nullptr) ? tvalue : bcpTValue, status);
         }
     }
@@ -2597,13 +2597,7 @@ Locale::getKeywordValue(StringPiece keywordName, ByteSink& sink, UErrorCode& sta
         return;
     }
 
-    // TODO: Remove the need for a const char* to a NUL terminated buffer.
-    const CharString keywordName_nul(keywordName, status);
-    if (U_FAILURE(status)) {
-        return;
-    }
-
-    ulocimp_getKeywordValue(fullName, keywordName_nul.data(), sink, status);
+    ulocimp_getKeywordValue(fullName, keywordName, sink, status);
 }
 
 void
