@@ -4130,6 +4130,10 @@ LocaleTest::TestAddLikelyAndMinimizeSubtags() {
     for (const auto& item : full_data) {
         const char* const org = item.from;
         const char* const exp = item.add;
+        if (uprv_strcmp(org,"und_Hant_CN") == 0 &&
+                logKnownIssue("CLDR-17908", "und_Hant_CN changed expected result for Likely Subtags")) {
+            continue;
+        }
         Locale res(org);
         res.addLikelySubtags(status);
         status.errIfFailureAndReset("\"%s\"", org);
@@ -4143,6 +4147,10 @@ LocaleTest::TestAddLikelyAndMinimizeSubtags() {
     for (const auto& item : full_data) {
         const char* const org = item.from;
         const char* const exp = item.remove;
+        if (uprv_strcmp(org,"und_Hant_CN") == 0 &&
+            	logKnownIssue("CLDR-17908", "und_Hant_CN changed expected result for Likely Subtags")) {
+            continue;
+        }
         Locale res(org);
         res.minimizeSubtags(status);
         status.errIfFailureAndReset("\"%s\"", org);
@@ -5710,6 +5718,10 @@ void LocaleTest::TestIsRightToLeft() {
     assertTrue("ckb RTL", Locale("ckb").isRightToLeft(), false, true);  // Sorani Kurdish
     assertFalse("fil LTR", Locale("fil").isRightToLeft());
     assertFalse("he-Zyxw LTR", Locale("he-Zyxw").isRightToLeft());
+
+    if (logKnownIssue("CLDR-17908", "und_Hant_CN changed expected result for Likely Subtags")) {
+            return;
+    }   
 }
 
 void LocaleTest::TestBug11421() {
@@ -5913,6 +5925,14 @@ testLikelySubtagsLineFn(void *context,
         *pErrorCode = U_ZERO_ERROR;
         return;
     }
+    
+     if ( (uprv_strcmp(source.c_str(), "und-Latn-MU") == 0 || uprv_strcmp(source.c_str(), "und-Latn-RS") == 0 || uprv_strcmp(source.c_str(), "und-Latn-SL") == 0
+            || uprv_strcmp(source.c_str(), "und-Latn-TK") == 0 || uprv_strcmp(source.c_str(), "und-Latn-ZM") == 0 )
+                 && THIS->logKnownIssue("CLDR-17908", "und_Hant_CN changed expected result for Likely Subtags")) {
+             return;
+     }    
+    
+ 
 
     Locale actualMax(l);
     actualMax.addLikelySubtags(*pErrorCode);

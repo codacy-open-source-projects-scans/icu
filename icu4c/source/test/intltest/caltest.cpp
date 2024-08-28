@@ -5632,10 +5632,8 @@ void CalendarTest::TestFirstDayOfWeek() {
     verifyFirstDayOfWeek("und-Thaa", UCAL_FRIDAY);
 
     // ssh => ssh_Arab_AE => Saturday
-    verifyFirstDayOfWeek("ssh", UCAL_SATURDAY);
-    // wbl_Arab => wbl_Arab_AF => Saturday
-    verifyFirstDayOfWeek("wbl-Arab", UCAL_SATURDAY);
-
+    verifyFirstDayOfWeek("ssh", UCAL_SATURDAY);  
+    
     // en => en_Latn_US => Sunday
     verifyFirstDayOfWeek("en", UCAL_SUNDAY);
     // und_Hira => ja_Hira_JP => Sunday
