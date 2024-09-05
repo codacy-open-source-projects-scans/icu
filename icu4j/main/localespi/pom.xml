@@ -14,6 +14,12 @@
 
   <artifactId>icu4j-localespi</artifactId>
   <description>icu4j-localespi is a supplemental library for icu4j, implementing Java Locale SPI.</description>
+  <url>${proj.url}</url>
+  <scm>
+    <connection>${proj.scm.connection}</connection>
+    <developerConnection>${proj.scm.developerConnection}</developerConnection>
+    <url>${proj.scm.url}</url>
+  </scm>
 
   <properties>
     <proj.displayname>JDK locale service provider</proj.displayname>
@@ -182,6 +188,19 @@
             <java.locale.providers>${localespi-tests.locale-providers}</java.locale.providers>
           </systemPropertyVariables>
 
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>flatten-maven-plugin</artifactId>
+      </plugin>
+
+      <plugin>
+        <artifactId>maven-deploy-plugin</artifactId>
+        <!-- We want to deploy this to Maven -->
+        <configuration>
+          <skip>false</skip>
         </configuration>
       </plugin>
 
