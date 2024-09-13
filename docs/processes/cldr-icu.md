@@ -82,6 +82,21 @@ considerations:
   resolving build issues and test failures for both ICU4C and ICU4J.
 * After everything is committed, you will need to tag the cldr and cldr-staging
   sources that ended up being used for the integration (see process below).
+* Before doing the integration, there are some prerequisite tasks to do in CLDR,
+  as described in the next section.
+
+# CLDR prerequisites for BRS integrations
+
+The following tasks should be done in the CLDR repo before beginning a CLDR-ICU
+integration that ss part of the BRS process; handle each of these using a separate
+ticket and a separate PR:
+
+1. Generate updated CLDR test data (which is copied to ICU), using the process in
+   [Generating CLDR testData](https://docs.google.com/document/d/1-RC99npKcSSwUoYGkSzxaKOe76gYRkWhGdFzCdIBCu4/edit#heading=h.2rum9c6hrr4w)
+
+2. Run CLDRModify with no options with no options and then with -fP. The webpage
+   for CLDRModify is currently being converted to markdown, a reference to it will
+   be added when that process is complete.
 
 # Environment variables
 
@@ -168,7 +183,7 @@ export ICU_DATA_VER=icudt(version)b
 2a. Configure ICU4C, build and test without new data first, to verify that
 there are no pre-existing errors, and to build some tools needed for later
 steps. Here `<platform>` is the runConfigureICU code for the platform you
-are building on, e.g. Linux, MacOSX, Cygwin.
+are building on, e.g. Linux, macOS, Cygwin.
 (optionally build with debug enabled)
 ```
 cd $ICU4C_DIR/source
@@ -379,12 +394,12 @@ If the data is OK , other sources of failure can include:
 
 Exhautive tests should always be run for a CLDR-ICU integration PR before it is merged.
 Once you have a PR, you can do this for both C and J as part of the pre-merge CI tests
-by adding the following as a comment in the pull request:<br>
-`/azp run CI-Exhaustive` (the exhaustive tests are not run automatically on every PR).
+by manually running a workflow (the exhaustive tests are not run automatically on every PR).
+See [Continuous Integration / Exhaustive Tests](../userguide/dev/ci.md#exhaustive-tests).
 
 The following instructions run the ICU4C exhaustive tests locally (which you may want to do
 before even committing changes, or which may be necessary to diagnose failures in the
-CI tests:
+CI tests):
 ```
 cd $ICU4C_DIR/source
 export INTLTEST_OPTS="-e"

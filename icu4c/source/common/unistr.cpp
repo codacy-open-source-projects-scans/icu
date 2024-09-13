@@ -230,11 +230,6 @@ UnicodeString::UnicodeString(UChar32 ch) {
   }
 }
 
-UnicodeString::UnicodeString(const char16_t *text) {
-  fUnion.fFields.fLengthAndFlags = kShortString;
-  doAppend(text, 0, -1);
-}
-
 UnicodeString::UnicodeString(const char16_t *text,
                              int32_t textLength) {
   fUnion.fFields.fLengthAndFlags = kShortString;
@@ -309,6 +304,16 @@ UnicodeString UnicodeString::readOnlyAliasFromU16StringView(std::u16string_view 
     result.setTo(false, text.data(), (int32_t)text.length());
   } else {
     result.setToBogus();
+  }
+  return result;
+}
+
+UnicodeString UnicodeString::readOnlyAliasFromUnicodeString(const UnicodeString &text) {
+  UnicodeString result;
+  if (text.isBogus()) {
+    result.setToBogus();
+  } else {
+    result.setTo(false, text.getBuffer(), text.length());
   }
   return result;
 }
