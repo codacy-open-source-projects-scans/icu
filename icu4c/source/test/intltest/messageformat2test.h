@@ -45,6 +45,8 @@ public:
     void testCustomFunctions(void);
     // Test the data model API
     void testDataModelAPI(void);
+    // Test the formatting API
+    void testFormatterAPI(void);
     void testAPI(void);
     void testAPISimple(void);
 
@@ -87,6 +89,8 @@ private:
     void testMessageFormatDateTimeSkeleton(message2::TestCase::Builder&, IcuTestErrorCode&);
     void testMf1Behavior(message2::TestCase::Builder&, IcuTestErrorCode&);
 
+    void testHighLoneSurrogate(void);
+    void testLowLoneSurrogate(void);
 }; // class TestMessageFormat2
 
 U_NAMESPACE_BEGIN

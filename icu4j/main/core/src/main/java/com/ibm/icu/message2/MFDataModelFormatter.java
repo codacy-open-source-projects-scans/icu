@@ -3,7 +3,6 @@
 
 package com.ibm.icu.message2;
 
-import java.time.Clock;
 import java.time.temporal.Temporal;
 import java.util.ArrayList;
 import java.util.Date;
@@ -28,10 +27,9 @@ import com.ibm.icu.message2.MFDataModel.Option;
 import com.ibm.icu.message2.MFDataModel.Pattern;
 import com.ibm.icu.message2.MFDataModel.SelectMessage;
 import com.ibm.icu.message2.MFDataModel.StringPart;
-import com.ibm.icu.message2.MFDataModel.UnsupportedAnnotation;
-import com.ibm.icu.message2.MFDataModel.UnsupportedExpression;
 import com.ibm.icu.message2.MFDataModel.VariableRef;
 import com.ibm.icu.message2.MFDataModel.Variant;
+import com.ibm.icu.message2.MessageFormatter.ErrorHandlingBehavior;
 import com.ibm.icu.util.Calendar;
 import com.ibm.icu.util.CurrencyAmount;
 
@@ -42,6 +40,7 @@ import com.ibm.icu.util.CurrencyAmount;
 // TODO: move this in the MessageFormatter?
 class MFDataModelFormatter {
     private final Locale locale;
+    private final ErrorHandlingBehavior errorHandlingBehavior;
     private final MFDataModel.Message dm;
 
     private final MFFunctionRegistry standardFunctions;
@@ -49,8 +48,13 @@ class MFDataModelFormatter {
     private static final MFFunctionRegistry EMPTY_REGISTY = MFFunctionRegistry.builder().build();
 
     MFDataModelFormatter(
-            MFDataModel.Message dm, Locale locale, MFFunctionRegistry customFunctionRegistry) {
+            MFDataModel.Message dm,
+            Locale locale,
+            ErrorHandlingBehavior errorHandlingBehavior,
+            MFFunctionRegistry customFunctionRegistry) {
         this.locale = locale;
+        this.errorHandlingBehavior = errorHandlingBehavior == null
+                ? ErrorHandlingBehavior.BEST_EFFORT : errorHandlingBehavior;
         this.dm = dm;
         this.customFunctions =
                 customFunctionRegistry == null ? EMPTY_REGISTY : customFunctionRegistry;
@@ -64,7 +68,6 @@ class MFDataModelFormatter {
                         .setDefaultFormatterNameForType(Date.class, "datetime")
                         .setDefaultFormatterNameForType(Calendar.class, "datetime")
                         .setDefaultFormatterNameForType(java.util.Calendar.class, "datetime")
-                        .setDefaultFormatterNameForType(Clock.class, "datetime")
                         .setDefaultFormatterNameForType(Temporal.class, "datetime")
 
                         // Number formatting
@@ -98,17 +101,20 @@ class MFDataModelFormatter {
         if (dm instanceof MFDataModel.PatternMessage) {
             MFDataModel.PatternMessage pm = (MFDataModel.PatternMessage) dm;
             variables = resolveDeclarations(pm.declarations, arguments);
+            if (pm.pattern == null) {
+                fatalFormattingError("The PatternMessage is null.");
+            }
             patternToRender = pm.pattern;
         } else if (dm instanceof MFDataModel.SelectMessage) {
             MFDataModel.SelectMessage sm = (MFDataModel.SelectMessage) dm;
             variables = resolveDeclarations(sm.declarations, arguments);
             patternToRender = findBestMatchingPattern(sm, variables, arguments);
+            if (patternToRender == null) {
+                fatalFormattingError("Cannor find a match for the selector.");
+            }
         } else {
-            formattingError("");
-            return "ERROR!";
-        }
-
-        if (patternToRender == null) {
+            fatalFormattingError("Unknown message type.");
+            // formattingError throws, so the return does not actually happen
             return "ERROR!";
         }
 
@@ -123,10 +129,8 @@ class MFDataModelFormatter {
                 result.append(formattedExpression.getFormattedValue().toString());
             } else if (part instanceof MFDataModel.Markup) {
                 // Ignore
-            } else if (part instanceof MFDataModel.UnsupportedExpression) {
-                // Ignore
             } else {
-                formattingError("Unknown part type: " + part);
+                fatalFormattingError("Unknown part type: " + part);
             }
         }
         return result.toString();
@@ -180,7 +184,7 @@ class MFDataModelFormatter {
                 // spec: Append `rv` as the last element of the list `res`.
                 res.add(rs);
             } else {
-                throw new IllegalArgumentException("Unknown selector type: " + functionName);
+                fatalFormattingError("Unknown selector type: " + functionName);
             }
         }
 
@@ -188,7 +192,7 @@ class MFDataModelFormatter {
         // or we have thrown an exception.
         // But just in case someone removes the throw above?
         if (res.size() != selectors.size()) {
-            throw new IllegalArgumentException(
+            fatalFormattingError(
                     "Something went wrong, not enough selector functions, "
                             + res.size() + " vs. " + selectors.size());
         }
@@ -217,7 +221,7 @@ class MFDataModelFormatter {
                     // spec: Append `ks` as the last element of the list `keys`.
                     keys.add(ks);
                 } else {
-                    formattingError("Literal expected, but got " + key);
+                    fatalFormattingError("Literal expected, but got " + key);
                 }
             }
             // spec: Let `rv` be the resolved value at index `i` of `res`.
@@ -249,7 +253,7 @@ class MFDataModelFormatter {
                 }
                 // spec: Assert that `key` is a _literal_.
                 if (!(key instanceof Literal)) {
-                    formattingError("Literal expected");
+                    fatalFormattingError("Literal expected");
                 }
                 // spec: Let `ks` be the resolved value of `key`.
                 String ks = ((Literal) key).value;
@@ -304,7 +308,7 @@ class MFDataModelFormatter {
                 if (!(key instanceof CatchallKey)) {
                     // spec: Assert that `key` is a _literal_.
                     if (!(key instanceof Literal)) {
-                        formattingError("Literal expected");
+                        fatalFormattingError("Literal expected");
                     }
                     // spec: Let `ks` be the resolved value of `key`.
                     String ks = ((Literal) key).value;
@@ -327,8 +331,7 @@ class MFDataModelFormatter {
         // And should do that only once, when building the data model.
         if (patternToRender == null) {
             // If there was a case with all entries in the keys `*` this should not happen
-            throw new IllegalArgumentException(
-                    "The selection went wrong, cannot select any option.");
+            fatalFormattingError("The selection went wrong, cannot select any option.");
         }
 
         return patternToRender;
@@ -356,7 +359,7 @@ class MFDataModelFormatter {
         List<LiteralOrCatchallKey> v1 = o1.variant.keys;
         List<LiteralOrCatchallKey> v2 = o1.variant.keys;
         if (v1.size() != v2.size()) {
-            formattingError("The number of keys is not equal.");
+            fatalFormattingError("The number of keys is not equal.");
         }
         for (int i = 0; i < v1.size(); i++) {
             LiteralOrCatchallKey k1 = v1.get(i);
@@ -399,7 +402,7 @@ class MFDataModelFormatter {
         }
     }
 
-    private static void formattingError(String message) {
+    private static void fatalFormattingError(String message) throws IllegalArgumentException {
         throw new IllegalArgumentException(message);
     }
 
@@ -417,7 +420,7 @@ class MFDataModelFormatter {
                 functionName = customFunctions.getDefaultFormatterNameForType(clazz);
             }
             if (functionName == null) {
-                throw new IllegalArgumentException(
+                fatalFormattingError(
                         "Object to format without a function, and unknown type: "
                                 + toFormat.getClass().getName());
             }
@@ -436,10 +439,8 @@ class MFDataModelFormatter {
             Map<String, Object> arguments) {
         if (value instanceof Literal) {
             String val = ((Literal) value).value;
-            Number nr = OptUtils.asNumber(val);
-            if (nr != null) {
-                return nr;
-            }
+            // "The resolution of a text or literal MUST resolve to a string."
+            // https://github.com/unicode-org/message-format-wg/blob/main/spec/formatting.md#literal-resolution
             return val;
         } else if (value instanceof VariableRef) {
             String varName = ((VariableRef) value).name;
@@ -514,33 +515,38 @@ class MFDataModelFormatter {
             // No output on markup, for now (we only format to string)
             return new FormattedPlaceholder(expression, new PlainStringFormattedValue(""));
         } else {
-            UnsupportedExpression ue = (UnsupportedExpression) expression;
-            char sigil = ue.annotation.source.charAt(0);
-            return new FormattedPlaceholder(
-                    expression, new PlainStringFormattedValue("{" + sigil + "}"));
+            if (expression == null) {
+                fatalFormattingError("unexpected null expression");
+            } else {
+                fatalFormattingError("unknown expression type "
+                        + expression.getClass().getName());
+            }
         }
 
         if (annotation instanceof FunctionAnnotation) {
             FunctionAnnotation fa = (FunctionAnnotation) annotation;
             if (functionName != null && !functionName.equals(fa.name)) {
-                formattingError(
+                fatalFormattingError(
                         "invalid function overrides, '" + functionName + "' <> '" + fa.name + "'");
             }
             functionName = fa.name;
             Map<String, Object> newOptions = convertOptions(fa.options, variables, arguments);
             options.putAll(newOptions);
-        } else if (annotation instanceof UnsupportedAnnotation) {
-            // We don't know how to format unsupported annotations
-            return new FormattedPlaceholder(expression, new PlainStringFormattedValue(fallbackString));
         }
 
         FormatterFactory funcFactory = getFormattingFunctionFactoryByName(toFormat, functionName);
         if (funcFactory == null) {
+            if (errorHandlingBehavior == ErrorHandlingBehavior.STRICT) {
+                fatalFormattingError("unable to find function at " + fallbackString);
+            }
             return new FormattedPlaceholder(expression, new PlainStringFormattedValue(fallbackString));
         }
         Formatter ff = funcFactory.createFormatter(locale, options);
         String res = ff.formatToString(toFormat, arguments);
         if (res == null) {
+            if (errorHandlingBehavior == ErrorHandlingBehavior.STRICT) {
+                fatalFormattingError("unable to format string at " + fallbackString);
+            }
             res = fallbackString;
         }
 

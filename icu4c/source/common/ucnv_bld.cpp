@@ -270,7 +270,7 @@ static UBool U_CALLCONV
 isCnvAcceptable(void * /*context*/,
                 const char * /*type*/, const char * /*name*/,
                 const UDataInfo *pInfo) {
-    return static_cast<UBool>(
+    return
         pInfo->size>=20 &&
         pInfo->isBigEndian==U_IS_BIG_ENDIAN &&
         pInfo->charsetFamily==U_CHARSET_FAMILY &&
@@ -279,7 +279,7 @@ isCnvAcceptable(void * /*context*/,
         pInfo->dataFormat[1]==0x6e &&
         pInfo->dataFormat[2]==0x76 &&
         pInfo->dataFormat[3]==0x74 &&
-        pInfo->formatVersion[0]==6);  /* Everything will be version 6 */
+        pInfo->formatVersion[0]==6;  /* Everything will be version 6 */
 }
 
 /**
@@ -1440,7 +1440,7 @@ ucnv_swap(const UDataSwapper *ds,
                    MBCS_OPT_UNKNOWN_INCOMPATIBLE_MASK)==0
         ) {
             mbcsHeaderLength=mbcsHeader.options&MBCS_OPT_LENGTH_MASK;
-            noFromU=(UBool)((mbcsHeader.options&MBCS_OPT_NO_FROM_U)!=0);
+            noFromU = (mbcsHeader.options & MBCS_OPT_NO_FROM_U) != 0;
         } else {
             udata_printError(ds, "ucnv_swap(): unsupported _MBCSHeader.version %d.%d\n",
                              inMBCSHeader->version[0], inMBCSHeader->version[1]);

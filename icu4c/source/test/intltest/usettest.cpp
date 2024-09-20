@@ -2135,13 +2135,13 @@ UBool UnicodeSetTest::checkEqual(
     UnicodeString source; s.toPattern(source, true);
     UnicodeString result; t.toPattern(result, true);
     if (s != t) {
-        intlTest.errln((UnicodeString)"FAIL: " + message
+        intlTest.errln(UnicodeString("FAIL: ") + message
               + "\nsource = " + source
               + "\nresult = " + result
               );
         return false;
     } else {
-        intlTest.logln((UnicodeString)"Ok: " + message
+        intlTest.logln(UnicodeString("Ok: ") + message
               + "\nsource = " + source
               + "\nresult = " + result
               );
@@ -2530,7 +2530,7 @@ public:
     }
 
     UBool hasStrings() const {
-        return static_cast<UBool>(stringsLength > 0);
+        return stringsLength > 0;
     }
 
     UBool hasStringsWithSurrogates() const {

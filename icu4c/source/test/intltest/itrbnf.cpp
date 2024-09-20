@@ -80,6 +80,8 @@ void IntlTestRBNF::runIndexedTest(int32_t index, UBool exec, const char* &name, 
         TESTCASE(28, TestNorwegianSpellout);
         TESTCASE(29, TestNumberingSystem);
         TESTCASE(30, TestDFRounding);
+        TESTCASE(31, TestMemoryLeak22899);
+        TESTCASE(32, TestInfiniteRecursion);
 #else
         TESTCASE(0, TestRBNFDisabled);
 #endif
@@ -1338,6 +1340,14 @@ void IntlTestRBNF::TestDFRounding()
         };
         doTest(nfFloor.getAlias(), integerTestData, false);
     }
+}
+
+void IntlTestRBNF::TestMemoryLeak22899()
+{
+    UErrorCode status = U_ZERO_ERROR;
+    UParseError perror;
+    icu::UnicodeString str(u"0,31,01,30,01,0,01,01,30,01,30,31,01,30,01,30,30,00,01,0:");
+    icu::RuleBasedNumberFormat rbfmt(str, icu::Locale::getEnglish(), perror, status);
 }
 
 void 
@@ -2602,6 +2612,39 @@ IntlTestRBNF::TestNumberingSystem() {
         result.remove();
         rbnf.setDefaultRuleSet(u"%ethiopic", err);
         assertEquals("Wrong result with Ethiopic rule set", u"፻፳፫", rbnf.format(123, result, err));
+    }
+}
+
+void
+IntlTestRBNF::TestInfiniteRecursion() {
+    UnicodeString badRules[] = {
+        ">>",
+        "<<",
+        "<<<",
+        ">>>",
+        "%foo: x=%foo=",
+        "%one: x>%two>; %two: y>%one>;"
+    };
+    
+    for (int32_t i = 0; i < UPRV_LENGTHOF(badRules); i++) {
+        UErrorCode err = U_ZERO_ERROR;
+        UParseError parseErr;
+        RuleBasedNumberFormat rbnf(badRules[i], parseErr, err);
+        
+        if (U_SUCCESS(err)) {
+            UnicodeString result;
+            rbnf.format(5, result);
+            // we don't actually care about the result and the function doesn't return an error code;
+            // we just want to make sure the function returns
+            
+            Formattable pResult;
+            rbnf.parse("foo", pResult, err);
+            assertTrue("rbnf.parse() didn't return U_INVALID_FORMAT_ERROR!", err == U_INVALID_FORMAT_ERROR);
+        } else {
+            // eventually it'd be nice to statically analyze the rules for (at least) the most common
+            // causes of infinite recursion, in which case we'd end up down here and need to check
+            // the error code.  But for now, we probably won't end up here and don't care if we do
+        }
     }
 }
 

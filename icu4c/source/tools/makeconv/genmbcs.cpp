@@ -559,7 +559,7 @@ MBCSIsValid(NewConverter *cnvData,
             const uint8_t *bytes, int32_t length) {
     MBCSData *mbcsData=(MBCSData *)cnvData;
 
-    return (UBool)(1==ucm_countChars(&mbcsData->ucm->states, bytes, length));
+    return 1==ucm_countChars(&mbcsData->ucm->states, bytes, length);
 }
 U_CDECL_END
 static UBool
@@ -970,7 +970,7 @@ MBCSAddTable(NewConverter *cnvData, UCMTable *table, UConverterStaticData *stati
      * a sorted table, which makeconv generates when explicit precision
      * indicators are used.
      */
-    mbcsData->utf8Friendly=utf8Friendly=(UBool)((table->flagsType&UCM_FLAGS_EXPLICIT)!=0);
+    mbcsData->utf8Friendly = utf8Friendly = (table->flagsType & UCM_FLAGS_EXPLICIT) != 0;
     if(utf8Friendly) {
         mbcsData->utf8Max=MBCS_UTF8_MAX;
         if(SMALL && maxCharLength>1) {

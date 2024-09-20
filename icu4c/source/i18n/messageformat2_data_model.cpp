@@ -186,6 +186,9 @@ bool Key::operator==(const Key& other) const {
     if (isWildcard()) {
         return other.isWildcard();
     }
+    if (other.isWildcard()) {
+        return false;
+    }
     return (asLiteral() == other.asLiteral());
 }
 
@@ -833,23 +836,19 @@ const Expression& Binding::getValue() const {
         } else {
             const Operator* rator = rhs.getOperator(errorCode);
             bool hasOperator = U_SUCCESS(errorCode);
-            if (hasOperator && rator->isReserved()) {
-                errorCode = U_INVALID_STATE_ERROR;
+            // Clear error code -- the "error" from the absent operator
+            // is handled
+            errorCode = U_ZERO_ERROR;
+            b = Binding(variableName, std::move(rhs));
+            b.local = false;
+            if (hasOperator) {
+                rator = b.getValue().getOperator(errorCode);
+                U_ASSERT(U_SUCCESS(errorCode));
+                b.annotation = &rator->contents;
             } else {
-                // Clear error code -- the "error" from the absent operator
-                // is handled
-                errorCode = U_ZERO_ERROR;
-                b = Binding(variableName, std::move(rhs));
-                b.local = false;
-                if (hasOperator) {
-                    rator = b.getValue().getOperator(errorCode);
-                    U_ASSERT(U_SUCCESS(errorCode));
-                    b.annotation = std::get_if<Callable>(&(rator->contents));
-                } else {
-                    b.annotation = nullptr;
-                }
-                U_ASSERT(!hasOperator || b.annotation != nullptr);
+                b.annotation = nullptr;
             }
+            U_ASSERT(!hasOperator || b.annotation != nullptr);
         }
     }
     return b;
@@ -857,7 +856,8 @@ const Expression& Binding::getValue() const {
 
 const OptionMap& Binding::getOptionsInternal() const {
     U_ASSERT(annotation != nullptr);
-    return annotation->getOptions();
+    U_ASSERT(std::holds_alternative<Callable>(*annotation));
+    return std::get_if<Callable>(annotation)->getOptions();
 }
 
 void Binding::updateAnnotation() {
@@ -867,7 +867,7 @@ void Binding::updateAnnotation() {
         return;
     }
     U_ASSERT(U_SUCCESS(localErrorCode) && !rator->isReserved());
-    annotation = std::get_if<Callable>(&(rator->contents));
+    annotation = &rator->contents;
 }
 
 Binding::Binding(const Binding& other) : var(other.var), expr(other.expr), local(other.local) {
@@ -930,9 +930,10 @@ const Pattern& MFDataModel::getPattern() const {
     return *(std::get_if<Pattern>(&body));
 }
 
+// Returns nullptr if no bindings
 const Binding* MFDataModel::getLocalVariablesInternal() const {
     U_ASSERT(!bogus);
-    U_ASSERT(bindings.isValid());
+    U_ASSERT(bindingsLen == 0 || bindings.isValid());
     return bindings.getAlias();
 }
 
@@ -948,9 +949,10 @@ const Variant* MFDataModel::getVariantsInternal() const {
     return std::get_if<Matcher>(&body)->variants.getAlias();
 }
 
+// Returns nullptr if no unsupported statements
 const UnsupportedStatement* MFDataModel::getUnsupportedStatementsInternal() const {
     U_ASSERT(!bogus);
-    U_ASSERT(unsupportedStatements.isValid());
+    U_ASSERT(unsupportedStatementsLen == 0 || unsupportedStatements != nullptr);
     return unsupportedStatements.getAlias();
 }
 
@@ -1056,7 +1058,6 @@ MFDataModel::MFDataModel(const MFDataModel& other) : body(Pattern()) {
     UErrorCode localErrorCode = U_ZERO_ERROR;
 
     if (other.hasPattern()) {
-        //        body.emplace<Pattern>(Pattern(*std::get_if<Pattern>(&other.body)));
         body = *std::get_if<Pattern>(&other.body);
     } else {
         const Expression* otherSelectors = other.getSelectorsInternal();
@@ -1069,17 +1070,17 @@ MFDataModel::MFDataModel(const MFDataModel& other) : body(Pattern()) {
             bogus = true;
             return;
         }
-        //        body.emplace<Matcher>(Matcher(copiedSelectors, numSelectors, copiedVariants, numVariants));
         body = Matcher(copiedSelectors, numSelectors, copiedVariants, numVariants);
     }
 
     bindingsLen = other.bindingsLen;
-    bindings.adoptInstead(copyArray(other.bindings.getAlias(), bindingsLen, localErrorCode));
-    if (U_FAILURE(localErrorCode)) {
-        bogus = true;
+    if (bindingsLen > 0) {
+        bindings.adoptInstead(copyArray(other.bindings.getAlias(), bindingsLen, localErrorCode));
     }
     unsupportedStatementsLen = other.unsupportedStatementsLen;
-    unsupportedStatements.adoptInstead(copyArray(other.unsupportedStatements.getAlias(), unsupportedStatementsLen, localErrorCode));
+    if (unsupportedStatementsLen > 0) {
+        unsupportedStatements.adoptInstead(copyArray(other.unsupportedStatements.getAlias(), unsupportedStatementsLen, localErrorCode));
+    }
     if (U_FAILURE(localErrorCode)) {
         bogus = true;
     }
@@ -1106,9 +1107,14 @@ MFDataModel::MFDataModel(const MFDataModel::Builder& builder, UErrorCode& errorC
 
     U_ASSERT(builder.bindings != nullptr);
     bindingsLen = builder.bindings->size();
-    bindings.adoptInstead(copyVectorToArray<Binding>(*builder.bindings, errorCode));
+    if (bindingsLen > 0) {
+        bindings.adoptInstead(copyVectorToArray<Binding>(*builder.bindings, errorCode));
+    }
     unsupportedStatementsLen = builder.unsupportedStatements->size();
-    unsupportedStatements.adoptInstead(copyVectorToArray<UnsupportedStatement>(*builder.unsupportedStatements, errorCode));
+    if (unsupportedStatementsLen > 0) {
+        unsupportedStatements.adoptInstead(copyVectorToArray<UnsupportedStatement>(*builder.unsupportedStatements,
+                                                                                   errorCode));
+    }
     if (U_FAILURE(errorCode)) {
         bogus = true;
     }

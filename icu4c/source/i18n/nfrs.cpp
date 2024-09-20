@@ -267,27 +267,35 @@ NFRuleSet::parseRules(UnicodeString& description, UErrorCode& status)
  * @param rule The rule to set.
  */
 void NFRuleSet::setNonNumericalRule(NFRule *rule) {
-    int64_t baseValue = rule->getBaseValue();
-    if (baseValue == NFRule::kNegativeNumberRule) {
-        delete nonNumericalRules[NEGATIVE_RULE_INDEX];
-        nonNumericalRules[NEGATIVE_RULE_INDEX] = rule;
-    }
-    else if (baseValue == NFRule::kImproperFractionRule) {
-        setBestFractionRule(IMPROPER_FRACTION_RULE_INDEX, rule, true);
-    }
-    else if (baseValue == NFRule::kProperFractionRule) {
-        setBestFractionRule(PROPER_FRACTION_RULE_INDEX, rule, true);
-    }
-    else if (baseValue == NFRule::kDefaultRule) {
-        setBestFractionRule(DEFAULT_RULE_INDEX, rule, true);
-    }
-    else if (baseValue == NFRule::kInfinityRule) {
-        delete nonNumericalRules[INFINITY_RULE_INDEX];
-        nonNumericalRules[INFINITY_RULE_INDEX] = rule;
-    }
-    else if (baseValue == NFRule::kNaNRule) {
-        delete nonNumericalRules[NAN_RULE_INDEX];
-        nonNumericalRules[NAN_RULE_INDEX] = rule;
+    switch (rule->getBaseValue()) {
+        case NFRule::kNegativeNumberRule:
+            delete nonNumericalRules[NEGATIVE_RULE_INDEX];
+            nonNumericalRules[NEGATIVE_RULE_INDEX] = rule;
+            return;
+        case NFRule::kImproperFractionRule:
+            setBestFractionRule(IMPROPER_FRACTION_RULE_INDEX, rule, true);
+            return;
+        case NFRule::kProperFractionRule:
+            setBestFractionRule(PROPER_FRACTION_RULE_INDEX, rule, true);
+            return;
+        case NFRule::kDefaultRule:
+            setBestFractionRule(DEFAULT_RULE_INDEX, rule, true);
+            return;
+        case NFRule::kInfinityRule:
+            delete nonNumericalRules[INFINITY_RULE_INDEX];
+            nonNumericalRules[INFINITY_RULE_INDEX] = rule;
+            return;
+        case NFRule::kNaNRule:
+            delete nonNumericalRules[NAN_RULE_INDEX];
+            nonNumericalRules[NAN_RULE_INDEX] = rule;
+            return;
+        case NFRule::kNoBase:
+        case NFRule::kOtherRule:
+        default:
+            // If we do not remember the rule inside the object.
+            // delete it here to prevent memory leak.
+            delete rule;
+            return;
     }
 }
 
@@ -681,13 +689,19 @@ static void dumpUS(FILE* f, const UnicodeString& us) {
 #endif
 
 UBool
-NFRuleSet::parse(const UnicodeString& text, ParsePosition& pos, double upperBound, uint32_t nonNumericalExecutedRuleMask, Formattable& result) const
+NFRuleSet::parse(const UnicodeString& text, ParsePosition& pos, double upperBound, uint32_t nonNumericalExecutedRuleMask, int32_t recursionCount, Formattable& result) const
 {
     // try matching each rule in the rule set against the text being
     // parsed.  Whichever one matches the most characters is the one
     // that determines the value we return.
 
     result.setLong(0);
+
+    // dump out if we've reached the recursion limit
+    if (recursionCount >= RECURSION_LIMIT) {
+        // stop recursion
+        return false;
+    }
 
     // dump out if there's no text to parse
     if (text.length() == 0) {
@@ -712,7 +726,7 @@ NFRuleSet::parse(const UnicodeString& text, ParsePosition& pos, double upperBoun
             nonNumericalExecutedRuleMask |= 1 << i;
 
             Formattable tempResult;
-            UBool success = nonNumericalRules[i]->doParse(text, workingPos, 0, upperBound, nonNumericalExecutedRuleMask, tempResult);
+            UBool success = nonNumericalRules[i]->doParse(text, workingPos, 0, upperBound, nonNumericalExecutedRuleMask, recursionCount + 1, tempResult);
             if (success && (workingPos.getIndex() > highWaterMark.getIndex())) {
                 result = tempResult;
                 highWaterMark = workingPos;
@@ -751,7 +765,7 @@ NFRuleSet::parse(const UnicodeString& text, ParsePosition& pos, double upperBoun
                 continue;
             }
             Formattable tempResult;
-            UBool success = rules[i]->doParse(text, workingPos, fIsFractionRuleSet, upperBound, nonNumericalExecutedRuleMask, tempResult);
+            UBool success = rules[i]->doParse(text, workingPos, fIsFractionRuleSet, upperBound, nonNumericalExecutedRuleMask, recursionCount + 1, tempResult);
             if (success && workingPos.getIndex() > highWaterMark.getIndex()) {
                 result = tempResult;
                 highWaterMark = workingPos;
