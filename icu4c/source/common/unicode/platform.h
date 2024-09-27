@@ -132,6 +132,8 @@
 #define U_PF_BROWSER_NATIVE_CLIENT 4020
 /** Android is based on Linux. @internal */
 #define U_PF_ANDROID 4050
+/** Haiku is a POSIX-ish platform. @internal */
+#define U_PF_HAIKU 4080
 /** Fuchsia is a POSIX-ish platform. @internal */
 #define U_PF_FUCHSIA 4100
 /* Maximum value for Linux-based platform is 4499 */
@@ -154,6 +156,8 @@
 #   define U_PLATFORM U_PF_MINGW
 #elif defined(__CYGWIN__)
 #   define U_PLATFORM U_PF_CYGWIN
+    /* Cygwin uchar.h doesn't exist until Cygwin 3.5. */
+#   include <cygwin/version.h>
 #elif defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 #   define U_PLATFORM U_PF_WINDOWS
 #elif defined(__ANDROID__)
@@ -200,6 +204,8 @@
 #   define U_PLATFORM U_PF_OS390
 #elif defined(__OS400__) || defined(__TOS_OS400__)
 #   define U_PLATFORM U_PF_OS400
+#elif defined(__HAIKU__)
+#   define U_PLATFORM U_PF_HAIKU
 #elif defined(__EMSCRIPTEN__)
 #   define U_PLATFORM U_PF_EMSCRIPTEN
 #else
@@ -722,12 +728,16 @@
     /*
      * Notes:
      * C++11 and C11 require support for UTF-16 literals
-     * Doesn't work on Mac C11 (see workaround in ptypes.h).
+     * Doesn't work on Mac C11 (see workaround in ptypes.h)
+     * or Cygwin less than 3.5.
      */
-#   if defined(__cplusplus) || !U_PLATFORM_IS_DARWIN_BASED
+#   if defined(__cplusplus)
 #       define U_HAVE_CHAR16_T 1
-#   else
+#   elif U_PLATFORM_IS_DARWIN_BASED || (U_PLATFORM == U_PF_CYGWIN && CYGWIN_VERSION_DLL_MAJOR < 3005)
 #       define U_HAVE_CHAR16_T 0
+#   else
+        // conformant C11
+#       define U_HAVE_CHAR16_T 1
 #   endif
 #endif
 
@@ -768,7 +778,7 @@
 #elif defined(_MSC_VER) || (UPRV_HAS_DECLSPEC_ATTRIBUTE(__dllexport__) && \
                             UPRV_HAS_DECLSPEC_ATTRIBUTE(__dllimport__))
 #   define U_EXPORT __declspec(dllexport)
-#elif defined(__GNUC__)
+#elif defined(__GNUC__) || defined(__open_xl__)
 #   define U_EXPORT __attribute__((visibility("default")))
 #elif (defined(__SUNPRO_CC) && __SUNPRO_CC >= 0x550) \
    || (defined(__SUNPRO_C) && __SUNPRO_C >= 0x550) 
@@ -807,7 +817,7 @@
  */
 #ifdef U_HIDDEN
     /* Use the predefined value. */
-#elif defined(__GNUC__)
+#elif defined(__GNUC__) || defined(__open_xl__)
 #   define U_HIDDEN __attribute__((visibility("hidden")))
 #else
 #   define U_HIDDEN 
