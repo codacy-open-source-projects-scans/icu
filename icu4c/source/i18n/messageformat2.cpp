@@ -3,6 +3,8 @@
 
 #include "unicode/utypes.h"
 
+#if !UCONFIG_NO_NORMALIZATION
+
 #if !UCONFIG_NO_FORMATTING
 
 #if !UCONFIG_NO_MF2
@@ -11,8 +13,10 @@
 #include "unicode/messageformat2_data_model.h"
 #include "unicode/messageformat2_formattable.h"
 #include "unicode/messageformat2.h"
+#include "unicode/normalizer2.h"
 #include "unicode/unistr.h"
 #include "messageformat2_allocation.h"
+#include "messageformat2_checker.h"
 #include "messageformat2_evaluation.h"
 #include "messageformat2_macros.h"
 
@@ -37,7 +41,7 @@ static Formattable evalLiteral(const Literal& lit) {
         // The fallback for a variable name is itself.
         UnicodeString str(DOLLAR);
         str += var;
-        const Formattable* val = context.getGlobal(var, errorCode);
+        const Formattable* val = context.getGlobal(*this, var, errorCode);
         if (U_SUCCESS(errorCode)) {
             return (FormattedPlaceholder(*val, str));
         }
@@ -52,9 +56,9 @@ static Formattable evalLiteral(const Literal& lit) {
 }
 
 [[nodiscard]] FormattedPlaceholder MessageFormatter::formatOperand(const Environment& env,
-                                                             const Operand& rand,
-                                                             MessageContext& context,
-                                                             UErrorCode &status) const {
+                                                                   const Operand& rand,
+                                                                   MessageContext& context,
+                                                                   UErrorCode &status) const {
     if (U_FAILURE(status)) {
         return {};
     }
@@ -71,15 +75,19 @@ static Formattable evalLiteral(const Literal& lit) {
         // Eager vs. lazy evaluation is an open issue:
         // see https://github.com/unicode-org/message-format-wg/issues/299
 
+        // NFC-normalize the variable name. See
+        // https://github.com/unicode-org/message-format-wg/blob/main/spec/syntax.md#names-and-identifiers
+        const VariableName normalized = normalizeNFC(var);
+
         // Look up the variable in the environment
-        if (env.has(var)) {
+        if (env.has(normalized)) {
           // `var` is a local -- look it up
-          const Closure& rhs = env.lookup(var);
+          const Closure& rhs = env.lookup(normalized);
           // Format the expression using the environment from the closure
           return formatExpression(rhs.getEnv(), rhs.getExpr(), context, status);
         }
         // Variable wasn't found in locals -- check if it's global
-        FormattedPlaceholder result = evalArgument(var, context, status);
+        FormattedPlaceholder result = evalArgument(normalized, context, status);
         if (status == U_ILLEGAL_ARGUMENT_ERROR) {
             status = U_ZERO_ERROR;
             // Unbound variable -- set a resolution error
@@ -328,13 +336,13 @@ void MessageFormatter::resolveSelectors(MessageContext& context, const Environme
     CHECK_ERROR(status);
     U_ASSERT(!dataModel.hasPattern());
 
-    const Expression* selectors = dataModel.getSelectorsInternal();
+    const VariableName* selectors = dataModel.getSelectorsInternal();
     // 1. Let res be a new empty list of resolved values that support selection.
     // (Implicit, since `res` is an out-parameter)
     // 2. For each expression exp of the message's selectors
     for (int32_t i = 0; i < dataModel.numSelectors(); i++) {
         // 2i. Let rv be the resolved value of exp.
-        ResolvedSelector rv = formatSelectorExpression(env, selectors[i], context, status);
+        ResolvedSelector rv = formatSelector(env, selectors[i], context, status);
         if (rv.hasSelector()) {
             // 2ii. If selection is supported for rv:
             // (True if this code has been reached)
@@ -461,8 +469,8 @@ void MessageFormatter::resolvePreferences(MessageContext& context, UVector& res,
             if (!key.isWildcard()) {
                 // 2ii(b)(a) Assert that key is a literal.
                 // (Not needed)
-                // 2ii(b)(b) Let `ks` be the resolved value of `key`.
-                ks = key.asLiteral().unquoted();
+                // 2ii(b)(b) Let `ks` be the resolved value of `key` in Unicode Normalization Form C.
+                ks = normalizeNFC(key.asLiteral().unquoted());
                 // 2ii(b)(c) Append `ks` as the last element of the list `keys`.
                 ksP.adoptInstead(create<UnicodeString>(std::move(ks), status));
                 CHECK_ERROR(status);
@@ -523,7 +531,7 @@ void MessageFormatter::filterVariants(const UVector& pref, UVector& vars, UError
             // 2i(c). Assert that `key` is a literal.
             // (Not needed)
             // 2i(d). Let `ks` be the resolved value of `key`.
-            UnicodeString ks = key.asLiteral().unquoted();
+            UnicodeString ks = normalizeNFC(key.asLiteral().unquoted());
             // 2i(e). Let `matches` be the list of strings at index `i` of `pref`.
             const UVector& matches = *(static_cast<UVector*>(pref[i])); // `matches` is a vector of strings
             // 2i(f). If `matches` includes `ks`
@@ -585,7 +593,7 @@ void MessageFormatter::sortVariants(const UVector& pref, UVector& vars, UErrorCo
                 // 5iii(c)(a). Assert that `key` is a literal.
                 // (Not needed)
                 // 5iii(c)(b). Let `ks` be the resolved value of `key`.
-                UnicodeString ks = key.asLiteral().unquoted();
+                UnicodeString ks = normalizeNFC(key.asLiteral().unquoted());
                 // 5iii(c)(c) Let matchpref be the integer position of ks in `matches`.
                 matchpref = vectorFind(matches, ks);
                 U_ASSERT(matchpref >= 0);
@@ -606,7 +614,10 @@ void MessageFormatter::sortVariants(const UVector& pref, UVector& vars, UErrorCo
 
 
 // Evaluate the operand
-ResolvedSelector MessageFormatter::resolveVariables(const Environment& env, const Operand& rand, MessageContext& context, UErrorCode &status) const {
+ResolvedSelector MessageFormatter::resolveVariables(const Environment& env,
+                                                    const Operand& rand,
+                                                    MessageContext& context,
+                                                    UErrorCode &status) const {
     if (U_FAILURE(status)) {
         return {};
     }
@@ -620,7 +631,13 @@ ResolvedSelector MessageFormatter::resolveVariables(const Environment& env, cons
     }
 
     // Must be variable
-    const VariableName& var = rand.asVariable();
+    return resolveVariables(env, rand.asVariable(), context, status);
+}
+
+ResolvedSelector MessageFormatter::resolveVariables(const Environment& env,
+                                                    const VariableName& var,
+                                                    MessageContext& context,
+                                                    UErrorCode &status) const {
     // Resolve the variable
     if (env.has(var)) {
         const Closure& referent = env.lookup(var);
@@ -683,13 +700,16 @@ ResolvedSelector MessageFormatter::resolveVariables(const Environment& env,
     }
 }
 
-ResolvedSelector MessageFormatter::formatSelectorExpression(const Environment& globalEnv, const Expression& expr, MessageContext& context, UErrorCode &status) const {
+ResolvedSelector MessageFormatter::formatSelector(const Environment& globalEnv,
+                                                  const VariableName& var,
+                                                  MessageContext& context,
+                                                  UErrorCode &status) const {
     if (U_FAILURE(status)) {
         return {};
     }
 
     // Resolve expression to determine if it's a function call
-    ResolvedSelector exprResult = resolveVariables(globalEnv, expr, context, status);
+    ResolvedSelector exprResult = resolveVariables(globalEnv, var, context, status);
 
     DynamicErrors& err = context.getErrors();
 
@@ -761,6 +781,7 @@ void MessageFormatter::formatSelectors(MessageContext& context, const Environmen
 UnicodeString MessageFormatter::formatToString(const MessageArguments& arguments, UErrorCode &status) {
     EMPTY_ON_ERROR(status);
 
+
     // Create a new environment that will store closures for all local variables
     Environment* env = Environment::create(status);
     // Create a new context with the given arguments and the `errors` structure
@@ -813,12 +834,14 @@ void MessageFormatter::check(MessageContext& context, const Environment& localEn
 
     // Check that variable is in scope
     const VariableName& var = rand.asVariable();
+    UnicodeString normalized = normalizeNFC(var);
+
     // Check local scope
-    if (localEnv.has(var)) {
+    if (localEnv.has(normalized)) {
         return;
     }
     // Check global scope
-    context.getGlobal(var, status);
+    context.getGlobal(*this, normalized, status);
     if (status == U_ILLEGAL_ARGUMENT_ERROR) {
         status = U_ZERO_ERROR;
         context.getErrors().setUnresolvedVariable(var, status);
@@ -855,7 +878,10 @@ void MessageFormatter::checkDeclarations(MessageContext& context, Environment*& 
         // memoizing the value of localEnv up to this point
 
         // Add the LHS to the environment for checking the next declaration
-        env = Environment::create(decl.getVariable(), Closure(rhs, *env), env, status);
+        env = Environment::create(normalizeNFC(decl.getVariable()),
+                                  Closure(rhs, *env),
+                                  env,
+                                  status);
         CHECK_ERROR(status);
     }
 }
@@ -866,3 +892,5 @@ U_NAMESPACE_END
 #endif /* #if !UCONFIG_NO_MF2 */
 
 #endif /* #if !UCONFIG_NO_FORMATTING */
+
+#endif /* #if !UCONFIG_NO_NORMALIZATION */

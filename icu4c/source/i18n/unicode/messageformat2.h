@@ -8,6 +8,8 @@
 
 #if U_SHOW_CPLUSPLUS_API
 
+#if !UCONFIG_NO_NORMALIZATION
+
 #if !UCONFIG_NO_FORMATTING
 
 #if !UCONFIG_NO_MF2
@@ -20,6 +22,7 @@
 #include "unicode/messageformat2_arguments.h"
 #include "unicode/messageformat2_data_model.h"
 #include "unicode/messageformat2_function_registry.h"
+#include "unicode/normalizer2.h"
 #include "unicode/unistr.h"
 
 #ifndef U_HIDE_DEPRECATED_API
@@ -325,6 +328,8 @@ namespace message2 {
 
     private:
         friend class Builder;
+        friend class Checker;
+        friend class MessageArguments;
         friend class MessageContext;
 
         MessageFormatter(const MessageFormatter::Builder& builder, UErrorCode &status);
@@ -334,8 +339,18 @@ namespace message2 {
         // Do not define default assignment operator
         const MessageFormatter &operator=(const MessageFormatter &) = delete;
 
-        ResolvedSelector resolveVariables(const Environment& env, const data_model::Operand&, MessageContext&, UErrorCode &) const;
-        ResolvedSelector resolveVariables(const Environment& env, const data_model::Expression&, MessageContext&, UErrorCode &) const;
+        ResolvedSelector resolveVariables(const Environment& env,
+                                          const data_model::VariableName&,
+                                          MessageContext&,
+                                          UErrorCode &) const;
+        ResolvedSelector resolveVariables(const Environment& env,
+                                          const data_model::Operand&,
+                                          MessageContext&,
+                                          UErrorCode &) const;
+        ResolvedSelector resolveVariables(const Environment& env,
+                                          const data_model::Expression&,
+                                          MessageContext&,
+                                          UErrorCode &) const;
 
         // Selection methods
 
@@ -352,6 +367,9 @@ namespace message2 {
         void resolvePreferences(MessageContext&, UVector&, UVector&, UErrorCode&) const;
 
         // Formatting methods
+
+        // Used for normalizing variable names and keys for comparison
+        UnicodeString normalizeNFC(const UnicodeString&) const;
         [[nodiscard]] FormattedPlaceholder formatLiteral(const data_model::Literal&) const;
         void formatPattern(MessageContext&, const Environment&, const data_model::Pattern&, UErrorCode&, UnicodeString&) const;
         // Formats a call to a formatting function
@@ -365,8 +383,11 @@ namespace message2 {
                                                        FunctionOptions&& options,
                                                        MessageContext& context,
                                                        UErrorCode& status) const;
-        // Formats an expression that appears as a selector
-        ResolvedSelector formatSelectorExpression(const Environment& env, const data_model::Expression&, MessageContext&, UErrorCode&) const;
+        // Formats a variableName that appears as a selector
+        ResolvedSelector formatSelector(const Environment& env,
+                                        const data_model::VariableName&,
+                                        MessageContext&,
+                                        UErrorCode&) const;
         // Formats an expression that appears in a pattern or as the definition of a local variable
         [[nodiscard]] FormattedPlaceholder formatExpression(const Environment&, const data_model::Expression&, MessageContext&, UErrorCode&) const;
         [[nodiscard]] FunctionOptions resolveOptions(const Environment& env, const OptionMap&, MessageContext&, UErrorCode&) const;
@@ -445,6 +466,10 @@ namespace message2 {
         // formatting methods return best-effort output.
         // The default is false.
         bool signalErrors = false;
+
+        // Used for implementing normalizeNFC()
+        const Normalizer2* nfcNormalizer = nullptr;
+
     }; // class MessageFormatter
 
 } // namespace message2
@@ -456,6 +481,8 @@ U_NAMESPACE_END
 #endif /* #if !UCONFIG_NO_MF2 */
 
 #endif /* #if !UCONFIG_NO_FORMATTING */
+
+#endif /* #if !UCONFIG_NO_NORMALIZATION */
 
 #endif /* U_SHOW_CPLUSPLUS_API */
 

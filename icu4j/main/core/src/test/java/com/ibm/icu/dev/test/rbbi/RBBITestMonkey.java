@@ -55,14 +55,14 @@ public class RBBITestMonkey extends CoreTestFmwk {
     //
     abstract static class RBBIMonkeyKind {
         RBBIMonkeyKind() {
-            fSets = new  ArrayList();
-            fClassNames = new ArrayList();
-            fAppliedRules = new ArrayList();
+            fSets = new  ArrayList<>();
+            fClassNames = new ArrayList<>();
+            fAppliedRules = new ArrayList<>();
         }
 
         // Return a List of UnicodeSets, representing the character classes used
         //   for this type of iterator.
-        abstract  List  charClasses();
+        abstract  List<UnicodeSet>  charClasses();
 
         // Set the test text on which subsequent calls to next() will operate
         abstract  void   setText(StringBuffer text);
@@ -145,9 +145,9 @@ public class RBBITestMonkey extends CoreTestFmwk {
         UnicodeSet                fHangulSet;
         UnicodeSet                fZWJSet;
         UnicodeSet                fExtendedPictSet;
-        UnicodeSet                fViramaSet;
-        UnicodeSet                fLinkingConsonantSet;
-        UnicodeSet                fExtCccZwjSet;
+        UnicodeSet                fInCBLinkerSet;
+        UnicodeSet                fInCBConsonantSet;
+        UnicodeSet                fInCBExtendSet;
         UnicodeSet                fAnySet;
 
 
@@ -176,11 +176,9 @@ public class RBBITestMonkey extends CoreTestFmwk {
             fHangulSet.addAll(fLVTSet);
 
             fExtendedPictSet  = new UnicodeSet("[:Extended_Pictographic:]");
-            fViramaSet        = new UnicodeSet("[\\p{Gujr}\\p{sc=Telu}\\p{sc=Mlym}\\p{sc=Orya}\\p{sc=Beng}\\p{sc=Deva}&"
-                                               + "\\p{Indic_Syllabic_Category=Virama}]");
-            fLinkingConsonantSet = new UnicodeSet("[\\p{Gujr}\\p{sc=Telu}\\p{sc=Mlym}\\p{sc=Orya}\\p{sc=Beng}\\p{sc=Deva}&"
-                                                  + "\\p{Indic_Syllabic_Category=Consonant}]");
-            fExtCccZwjSet     = new UnicodeSet("[[\\p{gcb=Extend}-\\p{ccc=0}] \\p{gcb=ZWJ}]");
+            fInCBLinkerSet    = new UnicodeSet("[\\p{InCB=Linker}]");
+            fInCBConsonantSet = new UnicodeSet("[\\p{InCB=Consonant}]");
+            fInCBExtendSet    = new UnicodeSet("[\\p{InCB=Extend}]");
             fAnySet           = new UnicodeSet("[\\u0000-\\U0010ffff]");
 
 
@@ -196,9 +194,9 @@ public class RBBITestMonkey extends CoreTestFmwk {
             fSets.add(fAnySet);                fClassNames.add("Any");
             fSets.add(fZWJSet);                fClassNames.add("ZWJ");
             fSets.add(fExtendedPictSet);       fClassNames.add("ExtendedPict");
-            fSets.add(fViramaSet);             fClassNames.add("Virama");
-            fSets.add(fLinkingConsonantSet);   fClassNames.add("LinkingConsonant");
-            fSets.add(fExtCccZwjSet);          fClassNames.add("ExtCccZwj");
+            fSets.add(fInCBLinkerSet);         fClassNames.add("InCB=Linker");
+            fSets.add(fInCBConsonantSet);      fClassNames.add("InCB=Consonant");
+            fSets.add(fInCBExtendSet);         fClassNames.add("InCB=Extend");
         }
 
 
@@ -209,7 +207,7 @@ public class RBBITestMonkey extends CoreTestFmwk {
         }
 
         @Override
-        List charClasses() {
+        List<UnicodeSet> charClasses() {
             return fSets;
         }
 
@@ -315,17 +313,18 @@ public class RBBITestMonkey extends CoreTestFmwk {
                 }
 
                 //   Note: Viramas are also included in the ExtCccZwj class.
-                if (fLinkingConsonantSet.contains(c2)) {
+                if (fInCBConsonantSet.contains(c2)) {
                     int pi = p1;
                     boolean sawVirama = false;
-                    while (pi > 0 && fExtCccZwjSet.contains(fText.codePointAt(pi))) {
-                        if (fViramaSet.contains(fText.codePointAt(pi))) {
+                    while (pi > 0 && (fInCBExtendSet.contains(fText.codePointAt(pi)) ||
+                                      fInCBLinkerSet.contains(fText.codePointAt(pi)))) {
+                        if (fInCBLinkerSet.contains(fText.codePointAt(pi))) {
                             sawVirama = true;
                         }
                         pi = fText.offsetByCodePoints(pi, -1);
                     }
-                    if (sawVirama && fLinkingConsonantSet.contains(fText.codePointAt(pi))) {
-                        setAppliedRule(p2, "GB 9.3 LinkingConsonant ExtCccZwj* Virama ExtCccZwj* × LinkingConsonant");
+                    if (sawVirama && fInCBConsonantSet.contains(fText.codePointAt(pi))) {
+                        setAppliedRule(p2, "GB9c \\p{InCB=Consonant} [ \\p{InCB=Extend} \\p{InCB=Linker} ]* \\p{InCB=Linker} [ \\p{InCB=Extend} \\p{InCB=Linker} ]* × \\p{InCB=Consonant})");
                         continue;
                     }
                 }
@@ -404,7 +403,7 @@ public class RBBITestMonkey extends CoreTestFmwk {
             fSingle_QuoteSet = new UnicodeSet("[\\p{Word_Break = Single_Quote}]");
             fDouble_QuoteSet = new UnicodeSet("[\\p{Word_Break = Double_Quote}]");
             fMidNumLetSet    = new UnicodeSet("[\\p{Word_Break = MidNumLet}]");
-            fMidLetterSet    = new UnicodeSet("[\\p{Word_Break = MidLetter} - [\\: \\uFE55 \\uFF1A]]");
+            fMidLetterSet    = new UnicodeSet("[\\p{Word_Break = MidLetter}]");
             fMidNumSet       = new UnicodeSet("[\\p{Word_Break = MidNum}]");
             fNumericSet      = new UnicodeSet("[\\p{Word_Break = Numeric}]");
             fFormatSet       = new UnicodeSet("[\\p{Word_Break = Format}]");
@@ -477,7 +476,7 @@ public class RBBITestMonkey extends CoreTestFmwk {
 
 
         @Override
-        List  charClasses() {
+        List<UnicodeSet> charClasses() {
             return fSets;
         }
 
@@ -1763,7 +1762,7 @@ public class RBBITestMonkey extends CoreTestFmwk {
 
 
         @Override
-        List  charClasses() {
+        List<UnicodeSet> charClasses() {
             return fSets;
         }
     }
@@ -1846,7 +1845,7 @@ public class RBBITestMonkey extends CoreTestFmwk {
 
 
         @Override
-        List  charClasses() {
+        List<UnicodeSet> charClasses() {
             return fSets;
         }
 
@@ -2204,7 +2203,7 @@ public class RBBITestMonkey extends CoreTestFmwk {
         int              TESTSTRINGLEN = 500;
         StringBuffer     testText         = new StringBuffer();
         int              numCharClasses;
-        List             chClasses;
+        List<UnicodeSet> chClasses;
         @SuppressWarnings("unused")
         int              expectedCount    = 0;
         boolean[]        expectedBreaks   = new boolean[TESTSTRINGLEN*2 + 1];

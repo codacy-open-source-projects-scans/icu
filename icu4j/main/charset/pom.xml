@@ -8,11 +8,12 @@
   <parent>
     <groupId>com.ibm.icu</groupId>
     <artifactId>icu4j-root</artifactId>
-    <version>76.1-SNAPSHOT</version>
+    <version>77.0.1-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
   <artifactId>icu4j-charset</artifactId>
+  <name>ICU4J Charset Provider</name>
   <description>icu4j-charset is a supplemental library for icu4j, implementing Java Charset SPI.</description>
   <url>${proj.url}</url>
   <scm>
