@@ -60,6 +60,10 @@ doWriteForward(const char16_t *src, int32_t srcLength,
                char16_t *dest, int32_t destSize,
                uint16_t options,
                UErrorCode *pErrorCode) {
+    if (srcLength<=0) {
+        *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
+        return 0;
+    }
     /* optimize for several combinations of options */
     switch(options&(UBIDI_REMOVE_BIDI_CONTROLS|UBIDI_DO_MIRRORING)) {
     case 0: {
@@ -173,6 +177,11 @@ doWriteReverse(const char16_t *src, int32_t srcLength,
      */
     int32_t i, j;
     UChar32 c;
+
+    if(srcLength<=0) {
+        *pErrorCode=U_ILLEGAL_ARGUMENT_ERROR;
+        return 0;
+    }
 
     /* optimize for several combinations of options */
     switch(options&(UBIDI_REMOVE_BIDI_CONTROLS|UBIDI_DO_MIRRORING|UBIDI_KEEP_BASE_COMBINING)) {
@@ -398,6 +407,7 @@ ubidi_writeReordered(UBiDi *pBiDi,
     /* destSize shrinks, later destination length=destCapacity-destSize */
     saveDest=dest;
     destCapacity=destSize;
+    runLength = 0;
 
     /*
      * Option "insert marks" implies UBIDI_INSERT_LRM_FOR_NUMERIC if the

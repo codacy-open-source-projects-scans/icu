@@ -2816,6 +2816,9 @@ PtnSkeleton::PtnSkeleton(const PtnSkeleton& other) {
 }
 
 void PtnSkeleton::copyFrom(const PtnSkeleton& other) {
+    if (this == &other) {
+        return;
+    }
     uprv_memcpy(type, other.type, sizeof(type));
     original.copyFrom(other.original);
     baseOriginal.copyFrom(other.baseOriginal);

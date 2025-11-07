@@ -351,6 +351,8 @@ public:
         TESTCASE_AUTO(testOwnership);
         TESTCASE_AUTO(testCPDefaultConstructors);
 
+        TESTCASE_AUTO(testIteratorCompatibility);
+
         // C++20 ranges with all 2021 defect reports.  There is no separate
         // feature test macro value for https://wg21.link/P2210R2, but 2021'10
         // gets us https://wg21.link/P2415R2 as well as
@@ -566,6 +568,7 @@ public:
             static_assert(!std::ranges::common_range<CodePoints>);
             static_assert(std::ranges::input_range<CodePoints>);
             static_assert(!std::ranges::forward_range<CodePoints>);
+            static_assert(!std::ranges::borrowed_range<CodePoints>);
             assertTrue("uncommon input streamed range",
                        std::ranges::equal(utfStringCodePoints<char32_t, UTF_BEHAVIOR_FFFD>(
                                               streamCodeUnits(std::stringstream(source))) |
@@ -584,6 +587,7 @@ public:
             static_assert(!std::ranges::common_range<UnsafeCodePoints>);
             static_assert(std::ranges::input_range<UnsafeCodePoints>);
             static_assert(!std::ranges::forward_range<UnsafeCodePoints>);
+            static_assert(!std::ranges::borrowed_range<UnsafeCodePoints>);
             assertTrue("unsafe uncommon input streamed range",
                        std::ranges::equal(unsafeUTFStringCodePoints<char32_t>(
                                               streamCodeUnits(std::stringstream(source))) |
@@ -619,6 +623,7 @@ public:
             static_assert(!std::ranges::common_range<CodePoints>);
             static_assert(std::ranges::forward_range<CodePoints>);
             static_assert(!std::ranges::bidirectional_range<CodePoints>);
+            static_assert(!std::ranges::borrowed_range<CodePoints>);
             assertTrue("uncommon forward lazily split range",
                        std::ranges::equal(utfStringCodePoints<char32_t, UTF_BEHAVIOR_FFFD>(codeUnits) |
                                               std::ranges::views::transform(codePoint),
@@ -629,6 +634,7 @@ public:
             static_assert(!std::ranges::common_range<UnsafeCodePoints>);
             static_assert(std::ranges::forward_range<UnsafeCodePoints>);
             static_assert(!std::ranges::bidirectional_range<UnsafeCodePoints>);
+            static_assert(!std::ranges::borrowed_range<UnsafeCodePoints>);
             assertTrue("unsafe uncommon forward lazily split range",
                        std::ranges::equal(unsafeUTFStringCodePoints<char32_t>(codeUnits) |
                                               std::ranges::views::transform(codePoint),
@@ -650,6 +656,7 @@ public:
             static_assert(!std::ranges::common_range<CodePoints>);
             static_assert(std::ranges::bidirectional_range<CodePoints>);
             static_assert(!std::ranges::random_access_range<CodePoints>);
+            static_assert(!std::ranges::borrowed_range<CodePoints>);
             assertTrue("uncommon bidirectional prefix range",
                        std::ranges::equal(utfStringCodePoints<char32_t, UTF_BEHAVIOR_FFFD>(codeUnits) |
                                               std::ranges::views::transform(codePoint),
@@ -665,6 +672,7 @@ public:
             static_assert(!std::ranges::common_range<UnsafeCodePoints>);
             static_assert(std::ranges::bidirectional_range<UnsafeCodePoints>);
             static_assert(!std::ranges::random_access_range<UnsafeCodePoints>);
+            static_assert(!std::ranges::borrowed_range<UnsafeCodePoints>);
             assertTrue("unsafe uncommon bidirectional prefix range",
                        std::ranges::equal(unsafeUTFStringCodePoints<char32_t>(codeUnits) |
                                               std::ranges::views::transform(codePoint),
@@ -698,6 +706,7 @@ public:
             static_assert(std::ranges::common_range<CodePoints>);
             static_assert(std::ranges::forward_range<CodePoints>);
             static_assert(!std::ranges::bidirectional_range<CodePoints>);
+            static_assert(!std::ranges::borrowed_range<CodePoints>);
             assertTrue("common forward concatenated range",
                        std::ranges::equal(utfStringCodePoints<char32_t, UTF_BEHAVIOR_FFFD>(codeUnits) |
                                               std::ranges::views::transform(codePoint),
@@ -708,6 +717,7 @@ public:
             static_assert(std::ranges::common_range<UnsafeCodePoints>);
             static_assert(std::ranges::forward_range<UnsafeCodePoints>);
             static_assert(!std::ranges::bidirectional_range<UnsafeCodePoints>);
+            static_assert(!std::ranges::borrowed_range<UnsafeCodePoints>);
             assertTrue("unsafe common forward concatenated range",
                        std::ranges::equal(unsafeUTFStringCodePoints<char32_t>(codeUnits) |
                                               std::ranges::views::transform(codePoint),
@@ -731,6 +741,7 @@ public:
             static_assert(std::ranges::common_range<CodePoints>);
             static_assert(std::ranges::forward_range<CodePoints>);
             static_assert(std::ranges::bidirectional_range<CodePoints>);
+            static_assert(!std::ranges::borrowed_range<CodePoints>);
             assertTrue("common bidirectional filtered range",
                        std::ranges::equal(utfStringCodePoints<char32_t, UTF_BEHAVIOR_FFFD>(codeUnits) |
                                               std::ranges::views::transform(codePoint),
@@ -756,6 +767,7 @@ public:
             static_assert(std::ranges::common_range<UnsafeCodePoints>);
             static_assert(std::ranges::forward_range<UnsafeCodePoints>);
             static_assert(std::ranges::bidirectional_range<UnsafeCodePoints>);
+            static_assert(!std::ranges::borrowed_range<UnsafeCodePoints>);
             assertTrue("unsafe common bidirectional filtered range",
                        std::ranges::equal(unsafeUTFStringCodePoints<char32_t>(codeUnits) |
                                               std::ranges::views::transform(codePoint),
@@ -789,6 +801,7 @@ public:
         static_assert(std::ranges::common_range<decltype(codePoints)>);
         static_assert(std::ranges::bidirectional_range<decltype(codePoints)>);
         static_assert(!std::ranges::random_access_range<decltype(codePoints)>);
+        static_assert(std::ranges::borrowed_range<decltype(codePoints)>);
         auto unsafeCodePoints = unsafeUTFStringCodePoints<char32_t>(codeUnits);
         static_assert(std::is_same_v<
                       decltype(unsafeCodePoints),
@@ -796,6 +809,7 @@ public:
         static_assert(std::ranges::common_range<decltype(unsafeCodePoints)>);
         static_assert(std::ranges::bidirectional_range<decltype(unsafeCodePoints)>);
         static_assert(!std::ranges::random_access_range<decltype(unsafeCodePoints)>);
+        static_assert(std::ranges::borrowed_range<decltype(unsafeCodePoints)>);
         assertTrue("safe contiguous range by reference",
                    std::ranges::equal(codePoints | std::ranges::views::transform(codePoint),
                                       std::u32string_view(U"𒀭𒊺𒉀​𒍠𒊩")));
@@ -806,13 +820,15 @@ public:
             utfStringCodePoints<char32_t, UTF_BEHAVIOR_FFFD>(std::u16string(u"𒀭𒊺𒉀​𒍠𒊩"));
         static_assert(std::is_same_v<
                       decltype(ownedCodePoints),
-                           UTFStringCodePoints<
-                               char32_t, UTF_BEHAVIOR_FFFD, std::ranges::owning_view<std::u16string>>>);
+                           UTFStringCodePoints<char32_t, UTF_BEHAVIOR_FFFD,
+                                                         std::ranges::owning_view<std::u16string>>>);
+        static_assert(!std::ranges::borrowed_range<decltype(ownedCodePoints)>);
         auto unsafeOwnedCodePoints =
             unsafeUTFStringCodePoints<char32_t>(std::u16string(u"𒀭𒊺𒉀​𒍠𒊩"));
         static_assert(std::is_same_v<
                       decltype(unsafeOwnedCodePoints),
                       UnsafeUTFStringCodePoints<char32_t, std::ranges::owning_view<std::u16string>>>);
+        static_assert(!std::ranges::borrowed_range<decltype(unsafeOwnedCodePoints)>);
         assertTrue("safe owned contiguous range",
                    std::ranges::equal(ownedCodePoints | std::ranges::views::transform(codePoint),
                                       std::u32string_view(U"𒀭𒊺𒉀​𒍠𒊩")));
@@ -1114,6 +1130,10 @@ public:
             auto referencingRange = utfStringCodePoints<char32_t, UTF_BEHAVIOR_FFFD>(referenced);
             auto owningRange =
                 utfStringCodePoints<char32_t, UTF_BEHAVIOR_FFFD>(NonCopyableString(u"𒀭𒊺𒉀 𒍠𒊩"));
+#if defined(__cpp_lib_ranges)
+            static_assert(std::ranges::borrowed_range<decltype(referencingRange)>);
+            static_assert(!std::ranges::borrowed_range<decltype(owningRange)>);
+#endif
             auto itr = referencingRange.begin();
             auto ito = owningRange.begin();
             for (; itr != referencingRange.end() && ito != owningRange.end(); ++itr, ++ito) {
@@ -1123,6 +1143,10 @@ public:
         {
             auto unsafeReferencingRange = unsafeUTFStringCodePoints<char32_t>(referenced);
             auto unsafeOwningRange = unsafeUTFStringCodePoints<char32_t>(NonCopyableString(u"𒀭𒊺𒉀 𒍠𒊩"));
+#if defined(__cpp_lib_ranges)
+            static_assert(std::ranges::borrowed_range<decltype(unsafeReferencingRange)>);
+            static_assert(!std::ranges::borrowed_range<decltype(unsafeOwningRange)>);
+#endif
             auto itr = unsafeReferencingRange.begin();
             auto ito = unsafeOwningRange.begin();
             for (; itr != unsafeReferencingRange.end() && ito != unsafeOwningRange.end(); ++itr, ++ito) {
@@ -1178,6 +1202,30 @@ public:
             }
         }
     }
+    void testIteratorCompatibility() {
+        std::u16string zamin = u"𒀭𒎏𒄈𒋢𒍠𒊩";
+        {
+            auto it = unsafeUTFStringCodePoints<char32_t>(zamin).begin();
+            ++it;
+            auto ningirsuBegin = it->begin();
+            std::advance(it, 2);
+            auto ningirsuEnd = it->end();
+            // In order for this to compile, the ningirsuBegin and ningirsuEnd iterators must be
+            // std::u16string iterators.
+            zamin.replace(ningirsuBegin, ningirsuEnd, u"𒊺𒉀");
+            assertEquals("Replacing ningirsu with nisaba", zamin, u"𒀭𒊺𒉀𒍠𒊩");
+        }
+        {
+            // Same with validating iterators.
+            auto it = utfStringCodePoints<char32_t, UTF_BEHAVIOR_FFFD>(zamin).begin();
+            ++it;
+            auto nisabaBegin = it->begin();
+            ++it;
+            auto nisabaEnd = it->end();
+            zamin.replace(nisabaBegin, nisabaEnd, u"𒂗𒆤");
+            assertEquals("Replacing nisaba with enlil", zamin, u"𒀭𒂗𒆤𒍠𒊩");
+        }
+    }
 
     void testAllCodePoints();
     void testAllScalarValues();
@@ -1199,6 +1247,7 @@ extern IntlTest *createUTFIteratorTest() {
 template<TestMode mode, typename CP32, UTFIllFormedBehavior behavior, typename StringView>
 void UTFIteratorTest::testBidiIter(StringView piped) {
     using Unit = typename StringView::value_type;
+    static_assert(icu::header::prv::is_basic_string_view_v<StringView>);
     auto parts = split(piped);
     auto joined = join<Unit>(parts);
     StringView sv(joined);
@@ -1207,9 +1256,12 @@ void UTFIteratorTest::testBidiIter(StringView piped) {
     // "a?ç?🚴" where the ? sequences are ill-formed
     if constexpr (mode == UNSAFE) {
         auto range = unsafeUTFStringCodePoints<CP32>(sv);
+        // Check that we take the StringView by copy, not by reference, even in C++17.
+        static_assert(std::is_same_v<decltype(range), UnsafeUTFStringCodePoints<UChar32, StringView>>);
         testBidiIter<mode, CP32, behavior>(sv, parts, range);
     } else {
         auto range = utfStringCodePoints<CP32, behavior>(sv);
+        static_assert(std::is_same_v<decltype(range), UTFStringCodePoints<CP32, behavior, StringView>>);
         testBidiIter<mode, CP32, behavior>(sv, parts, range);
     }
 }

@@ -234,6 +234,16 @@ constexpr bool range = range_type<Range>::value;
 #endif
 
 /** @internal */
+template <typename T> struct is_basic_string_view : std::false_type {};
+
+/** @internal */
+template <typename... Args>
+struct is_basic_string_view<std::basic_string_view<Args...>> : std::true_type {};
+
+/** @internal */
+template <typename T> constexpr bool is_basic_string_view_v = is_basic_string_view<T>::value;
+
+/** @internal */
 template<typename CP32, bool skipSurrogates>
 class CodePointsIterator {
     static_assert(sizeof(CP32) == 4, "CP32 must be a 32-bit type to hold a code point");
@@ -1741,6 +1751,21 @@ auto utfIterator(UnitIter p) {
  *
  * Call utfStringCodePoints() to have the compiler deduce the Range type.
  *
+ * UTFStringCodePoints is conditionally borrowed; that is, if Range is a borrowed range
+ * so is UTFStringCodePoints<CP32, behavior, Range>.
+ * Note that when given a range r that is an lvalue and is not a view,  utfStringCodePoints(r) uses a
+ * ref_view of r as the Range type, which is a borrowed range.
+ * In practice, this means that given a container variable r, the iterators of utfStringCodePoints(r) can
+ * be used as long as iterators on r are valid, without having to keep utfStringCodePoints(r) around.
+ * For instance:
+ * \code
+ *     std::u8string s = "𒇧𒇧";
+ *     // it outlives utfStringCodePoints<char32_t>(s).
+ *     auto it = utfStringCodePoints<char32_t>(s).begin();
+ *     ++it;
+ *     char32_t second_code_point = it->codePoint();  // OK.
+ * \endcode
+ * 
  * @tparam CP32 Code point type: UChar32 (=int32_t) or char32_t or uint32_t;
  *              should be signed if UTF_BEHAVIOR_NEGATIVE
  * @tparam behavior How to handle ill-formed Unicode strings
@@ -1871,7 +1896,14 @@ struct UTFStringCodePointsAdaptor
         return UTFStringCodePoints<CP32, behavior, std::ranges::views::all_t<Range>>(
             std::forward<Range>(unitRange));
 #else
-        return UTFStringCodePoints<CP32, behavior, Range>(std::forward<Range>(unitRange));
+        if constexpr (prv::is_basic_string_view_v<std::decay_t<Range>>) {
+            // Take basic_string_view by copy, not by reference.  In C++20 this is handled by
+            // all_t<Range>, which is Range if Range is a view.
+            return UTFStringCodePoints<CP32, behavior, std::decay_t<Range>>(
+                std::forward<Range>(unitRange));
+        } else {
+            return UTFStringCodePoints<CP32, behavior, Range>(std::forward<Range>(unitRange));
+        }
 #endif
     }
 };
@@ -2461,6 +2493,22 @@ auto unsafeUTFIterator(UnitIter iter) {
  *
  * Call unsafeUTFStringCodePoints() to have the compiler deduce the Range type.
  *
+ * UnsafeUTFStringCodePoints is conditionally borrowed; that is, if Range is a borrowed range
+ * so is UnsafeUTFStringCodePoints<CP32, behavior, Range>.
+ * Note that when given a range r that is an lvalue and is not a view,  unsafeUTFStringCodePoints(r) uses
+ * a ref_view of r as the Range type, which is a borrowed range.
+ * In practice, this means that given a container variable r, the iterators of
+ * unsafeUTFStringCodePoints(r) can be used as long as iterators on r are valid, without having to keep
+ * unsafeUTFStringCodePoints(r) around.
+ * For instance:
+ * \code
+ *     std::u8string s = "𒇧𒇧";
+ *     // it outlives unsafeUTFStringCodePoints<char32_t>(s).
+ *     auto it = unsafeUTFStringCodePoints<char32_t>(s).begin();
+ *     ++it;
+ *     char32_t second_code_point = it->codePoint();  // OK.
+ * \endcode
+ *
  * @tparam CP32 Code point type: UChar32 (=int32_t) or char32_t or uint32_t
  * @tparam Range A C++ "range" of Unicode UTF-8/16/32 code units
  * @draft ICU 78
@@ -2582,7 +2630,13 @@ struct UnsafeUTFStringCodePointsAdaptor
 #if defined(__cpp_lib_ranges) && __cpp_lib_ranges >= 2021'10  // We need https://wg21.link/P2415R2.
         return UnsafeUTFStringCodePoints<CP32, std::ranges::views::all_t<Range>>(std::forward<Range>(unitRange));
 #else
-        return UnsafeUTFStringCodePoints<CP32, Range>(std::forward<Range>(unitRange));
+        if constexpr (prv::is_basic_string_view_v<std::decay_t<Range>>) {
+            // Take basic_string_view by copy, not by reference.  In C++20 this is handled by
+            // all_t<Range>, which is Range if Range is a view.
+            return UnsafeUTFStringCodePoints<CP32, std::decay_t<Range>>(std::forward<Range>(unitRange));
+        } else {
+            return UnsafeUTFStringCodePoints<CP32, Range>(std::forward<Range>(unitRange));
+        }
 #endif
     }
 };
@@ -2604,6 +2658,19 @@ template<typename CP32>
 constexpr UnsafeUTFStringCodePointsAdaptor<CP32> unsafeUTFStringCodePoints;
 
 }  // namespace U_HEADER_ONLY_NAMESPACE
+
+
+#if defined(__cpp_lib_ranges)
+template <typename CP32, UTFIllFormedBehavior behavior, typename Range>
+constexpr bool std::ranges::enable_borrowed_range<
+    U_HEADER_ONLY_NAMESPACE::UTFStringCodePoints<CP32, behavior, Range>> =
+    std::ranges::enable_borrowed_range<Range>;
+
+template <typename CP32, typename Range>
+constexpr bool std::ranges::enable_borrowed_range<
+    U_HEADER_ONLY_NAMESPACE::UnsafeUTFStringCodePoints<CP32, Range>> =
+    std::ranges::enable_borrowed_range<Range>;
+#endif
 
 #endif  // U_HIDE_DRAFT_API
 #endif  // U_SHOW_CPLUSPLUS_API || U_SHOW_CPLUSPLUS_HEADER_API

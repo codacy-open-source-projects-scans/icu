@@ -585,6 +585,10 @@ const char16_t *
 Normalizer2Impl::decompose(const char16_t *src, const char16_t *limit,
                            ReorderingBuffer *buffer,
                            UErrorCode &errorCode) const {
+    if(src==nullptr) {
+        errorCode=U_ILLEGAL_ARGUMENT_ERROR;
+        return src;
+    }
     UChar32 minNoCP=minDecompNoCP;
     if(limit==nullptr) {
         src=copyLowPrefixFromNulTerminated(src, minNoCP, buffer, errorCode);

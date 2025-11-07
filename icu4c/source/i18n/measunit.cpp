@@ -2586,6 +2586,9 @@ MeasureUnit::MeasureUnit(MeasureUnitImpl&& impl)
         : fImpl(nullptr), fSubTypeId(-1), fTypeId(-1) {
     if (!findBySubType(impl.identifier.data(), this)) {
         fImpl = new MeasureUnitImpl(std::move(impl));
+        if (!fImpl) {
+            *this = MeasureUnit();
+        }
     }
 }
 

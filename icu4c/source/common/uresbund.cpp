@@ -1449,14 +1449,14 @@ UResourceBundle *init_resb_result(
     }
     if(key != nullptr) {
         ures_appendResPath(resB, key, static_cast<int32_t>(uprv_strlen(key)), status);
-        if(resB->fResPath[resB->fResPathLen-1] != RES_PATH_SEPARATOR) {
+        if(resB->fResPathLen > 0 && resB->fResPath[resB->fResPathLen-1] != RES_PATH_SEPARATOR) {
             ures_appendResPath(resB, RES_PATH_SEPARATOR_S, 1, status);
         }
     } else if(idx >= 0) {
         char buf[256];
         int32_t len = T_CString_integerToString(buf, idx, 10);
         ures_appendResPath(resB, buf, len, status);
-        if(resB->fResPath[resB->fResPathLen-1] != RES_PATH_SEPARATOR) {
+        if(resB->fResPathLen > 0 && resB->fResPath[resB->fResPathLen-1] != RES_PATH_SEPARATOR) {
             ures_appendResPath(resB, RES_PATH_SEPARATOR_S, 1, status);
         }
     }
