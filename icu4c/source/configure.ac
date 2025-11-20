@@ -618,7 +618,7 @@ case "${host}" in
         # We're using gcc, and the simple -a gcc command line works for genccode
         GENCCODE_ASSEMBLY="-a gcc"
     fi ;;
-i*86-*-solaris*)
+*86*-solaris*)
     if test "$GCC" = yes; then
         # When using gcc, look if we're also using GNU as.
         # When using GNU as, the simple -a gcc command line works for genccode.
