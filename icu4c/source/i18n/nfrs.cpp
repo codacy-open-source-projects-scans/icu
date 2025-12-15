@@ -598,6 +598,9 @@ NFRuleSet::findFractionRuleSetRule(double number) const
     // all the precision we need, and we can do all of the rest
     // of the math using integer arithmetic
     int64_t leastCommonMultiple = rules[0]->getBaseValue();
+    if (leastCommonMultiple == 0) {
+        return nullptr;
+    }
     int64_t numerator;
     {
         for (uint32_t i = 1; i < rules.size(); ++i) {

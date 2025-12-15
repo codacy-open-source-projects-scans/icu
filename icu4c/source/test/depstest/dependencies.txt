@@ -141,6 +141,10 @@ group: cplusplus
     # "Calls the current terminate handler."
     std::terminate()
 
+    # From std::array::at in libstdc++.  Note that we never call std::array::at, only operator[]
+    # which is noexcept.
+    "std::__throw_out_of_range_fmt(char const*, ...)"
+
 group: iostream
     "std::basic_ios<char, std::char_traits<char> >::clear(std::_Ios_Iostate)"
     "std::basic_ios<char, std::char_traits<char> >::eof() const"

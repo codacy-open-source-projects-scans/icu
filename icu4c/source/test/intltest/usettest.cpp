@@ -1971,13 +1971,13 @@ void UnicodeSetTest::TestLookupSymbolTable() {
             U_ZERO_ERROR,
             u"[[a-z]-[bc]]",
             u"[ad-z]",
-            {u'0', u'-', u"one", u"one", u'1', u']'},
+            {u'0', u'-', u"one", u'1', u']'},
             {{u"zero", u"0"}, {u"one", u"1"}}},
             {u"[$zero-$one]",
             U_ZERO_ERROR,
             u"[[a-z]-[bc]]",
             u"[ad-z]",
-            {u"zero", u"zero", u"zero", u"zero", u'0', u'-', u"one", u"one", u'1', u']'},
+            {u"zero", u"zero", u'0', u'-', u"one", u'1', u']'},
             {{u"zero", u"0"}, {u"one", u"1"}}},
             // If the variable expands to multiple symbols, only the first one is sequenced right after
             // the variable lookup.
@@ -1985,7 +1985,7 @@ void UnicodeSetTest::TestLookupSymbolTable() {
             U_ZERO_ERROR,
             u"[[bc][a-z]]",
             u"[a-z]",
-            {u"ten", u"ten", u"ten", u"ten", u'1', u'0', u']'},
+            {u"ten", u"ten", u'1', u'0', u']'},
             {{u"ten", u"10"}}},
             // Substitution of lookupMatcher symbols takes place after unescaping.
             {uR"([!-\u0030])", U_MALFORMED_SET, u"[]", u"[]", {u'!', u'-', u'0'}},
@@ -4716,6 +4716,18 @@ void UnicodeSetTest::TestToPatternOutput() {
 
 void UnicodeSetTest::TestParseErrors() {
     for (const auto expression : std::vector<std::u16string_view>{
+            uR"([\u])",
+            uR"([\x{}])",
+        }) {
+        UErrorCode errorCode = U_ZERO_ERROR;
+        const UnicodeSet set(expression, errorCode);
+        if (errorCode != U_MALFORMED_UNICODE_ESCAPE) {
+            UnicodeString s;
+            errln(expression + u": Expected U_MALFORMED_UNICODE_ESCAPE, got " + u_errorName(errorCode) +
+                  ", set is " + UnicodeSet(set).complement().complement().toPattern(s));
+        }
+    }
+    for (const auto expression : std::vector<std::u16string_view>{
             // Java error message: "Char expected after operator".
             u"[a-[b]]",
             // "Missing '['".
@@ -4764,6 +4776,10 @@ void UnicodeSetTest::TestParseErrors() {
             u"[:^]",
             uR"(\P)",
             uR"(\N)",
+            uR"([\p{Some_Property=\u}])",
+            uR"([:Some_Property=\u:])",
+            uR"(\p{Some_Property=\N{SOME CHARACTER}})",
+            uR"([\N{}])",
         }) {
         UErrorCode errorCode = U_ZERO_ERROR;
         const UnicodeSet set(expression, errorCode);

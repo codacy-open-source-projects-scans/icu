@@ -99,7 +99,8 @@ uenum_unextDefault(UEnumeration* en,
             if (ustr == nullptr) {
                 *status = U_MEMORY_ALLOCATION_ERROR;
             } else {
-                u_charsToUChars(cstr, ustr, len+1);
+                u_charsToUChars(cstr, ustr, len);
+                ustr[len] = 0;
             }
         }
     } else {
@@ -129,7 +130,8 @@ uenum_nextDefault(UEnumeration* en,
             *status = U_MEMORY_ALLOCATION_ERROR;
             return nullptr;
         }
-        u_UCharsToChars(tempUCharVal, tempCharVal, *resultLength + 1);
+        u_UCharsToChars(tempUCharVal, tempCharVal, *resultLength);
+        tempCharVal[*resultLength] = 0;
         return tempCharVal;
     } else {
         *status = U_UNSUPPORTED_ERROR;

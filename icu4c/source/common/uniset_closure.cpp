@@ -101,7 +101,7 @@ UnicodeSet& UnicodeSet::applyPattern(const UnicodeString& pattern,
     // _applyPattern calls add() etc., which set pat to empty.
     UnicodeString rebuiltPat;
     RuleCharacterIterator chars(pattern, symbols, pos);
-    applyPattern(chars, symbols, rebuiltPat, options, &UnicodeSet::closeOver, 0, status);
+    applyPattern(pattern, pos, chars, symbols, rebuiltPat, options, &UnicodeSet::closeOver, status);
     if (U_FAILURE(status)) return *this;
     if (chars.inVariable()) {
         // syntaxError(chars, "Extra chars in variable value");

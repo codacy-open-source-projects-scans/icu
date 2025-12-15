@@ -18,6 +18,9 @@
 *   Character property dependent functions moved here from uniset.cpp
 */
 
+#include <array>
+#include <optional>
+
 #include "unicode/utypes.h"
 #include "unicode/uniset.h"
 #include "unicode/parsepos.h"
@@ -196,7 +199,7 @@ UnicodeSet::applyPatternIgnoreSpace(const UnicodeString& pattern,
     // _applyPattern calls add() etc., which set pat to empty.
     UnicodeString rebuiltPat;
     RuleCharacterIterator chars(pattern, symbols, pos);
-    applyPattern(chars, symbols, rebuiltPat, USET_IGNORE_SPACE, nullptr, 0, status);
+    applyPattern(pattern, pos, chars, symbols, rebuiltPat, USET_IGNORE_SPACE, nullptr, status);
     if (U_FAILURE(status)) return;
     if (chars.inVariable()) {
         // syntaxError(chars, "Extra chars in variable value");
@@ -220,33 +223,467 @@ UBool UnicodeSet::resemblesPattern(const UnicodeString& pattern, int32_t pos) {
 // Implementation: Pattern parsing
 //----------------------------------------------------------------
 
-namespace {
+#define U_DEBUGGING_UNICODESET_PARSING 0
 
-/**
- * A small all-inline class to manage a UnicodeSet pointer.  Add
- * operator->() etc. as needed.
- */
-class UnicodeSetPointer {
-    UnicodeSet* p;
-public:
-    inline UnicodeSetPointer() : p(nullptr) {}
-    inline ~UnicodeSetPointer() { delete p; }
-    inline UnicodeSet* pointer() { return p; }
-    inline UBool allocate() {
-        if (p == nullptr) {
-            p = new UnicodeSet();
+class UnicodeSet::Lexer {
+  public:
+    Lexer(const UnicodeString &pattern,
+          const ParsePosition &parsePosition,
+          RuleCharacterIterator &chars,
+          uint32_t unicodeSetOptions,
+          const SymbolTable *const symbols)
+        : pattern_(pattern), parsePosition_(parsePosition), chars_(chars),
+          charsOptions_(RuleCharacterIterator::PARSE_VARIABLES | RuleCharacterIterator::PARSE_ESCAPES |
+                        ((unicodeSetOptions & USET_IGNORE_SPACE) != 0
+                             ? RuleCharacterIterator::SKIP_WHITESPACE
+                             : 0)),
+          symbols_(symbols) {}
+
+    class LexicalElement {
+      public:
+        bool isPropertyQuery() const {
+            return U_SUCCESS(errorCode_) && category_ == PROPERTY_QUERY;
         }
-        return p != nullptr;
+
+        bool isNamedElement() const {
+            return U_SUCCESS(errorCode_) && category_ == NAMED_ELEMENT;
+        }
+
+        bool isSetOperator(const char16_t op) const {
+            return U_SUCCESS(errorCode_) && category_ == SET_OPERATOR && string_[0] == op;
+        }
+
+        bool isStringLiteral() const {
+            return U_SUCCESS(errorCode_) && category_ == STRING_LITERAL;
+        }
+
+        bool isBracketedElement() const {
+            return U_SUCCESS(errorCode_) && category_ == BRACKETED_ELEMENT;
+        }
+
+        std::optional<UnicodeString> element() const {
+            if (U_SUCCESS(errorCode_) &&
+                (category_ == LITERAL_ELEMENT || category_ == ESCAPED_ELEMENT ||
+                 category_ == BRACKETED_ELEMENT || category_ == STRING_LITERAL)) {
+                return string_;
+            }
+            return std::nullopt;
+        }
+
+        std::optional<UChar32> codePoint() const {
+            if (U_SUCCESS(errorCode_) && (category_ == LITERAL_ELEMENT || category_ == ESCAPED_ELEMENT ||
+                                          category_ == BRACKETED_ELEMENT)) {
+                return string_.char32At(0);
+            }
+            return std::nullopt;
+        }
+
+        const UnicodeSet *standIn() const {
+            if (U_FAILURE(errorCode_) || category_ != STAND_IN) {
+                return nullptr;
+            }
+            return standIn_;
+        }
+
+        const UErrorCode& errorCode() const{
+          return errorCode_;
+        }
+
+#if U_DEBUGGING_UNICODESET_PARSING
+        UnicodeString debugString() const {
+            UnicodeString result;
+            if (U_FAILURE(errorCode_)) {
+                result.append(u"Ill-formed token (")
+                    .append(UnicodeString::fromUTF8(u_errorName(errorCode_)))
+                    .append(u"), possibly ");
+            }
+            return result.append(category_names_[category_])
+                .append(u" '")
+                .append(sourceText_)
+                .append(u"'");
+        }
+#endif
+
+      private:
+        // See https://unicode.org/reports/tr61#Lexical-Elements.
+        enum Category : std::uint8_t {
+            SET_OPERATOR,
+            LITERAL_ELEMENT,
+            ESCAPED_ELEMENT,
+            NAMED_ELEMENT,
+            BRACKETED_ELEMENT,
+            STRING_LITERAL,
+            PROPERTY_QUERY,
+            // ICU extension: A literal-element, escaped-element, or set-operator or (but not
+            // bracketed-element) which is mapped to a set.  This may also be an unescaped '{', in which
+            // case bracketed-element and string-literal are inaccessible.
+            STAND_IN,
+            END_OF_TEXT,
+        };
+        static constexpr std::array<std::u16string_view, 9> category_names_{{
+            u"set-operator",
+            u"literal-element",
+            u"escaped-element",
+            u"named-element",
+            u"bracketed-element",
+            u"string-literal",
+            u"property-query",
+            u"stand-in",
+            u"(end of text)",
+        }};
+        LexicalElement(Category category, UnicodeString string, RuleCharacterIterator::Pos after,
+                       UErrorCode errorCode, const UnicodeSet *standIn, std::u16string_view sourceText)
+            : category_(category), string_(std::move(string)), after_(after), errorCode_(errorCode),
+              standIn_(standIn), sourceText_(sourceText) {}
+        Category category_;
+        UnicodeString string_;
+        RuleCharacterIterator::Pos after_;
+        UErrorCode errorCode_;
+        const UnicodeSet *standIn_;
+        std::u16string_view sourceText_;
+
+        friend class Lexer;
+    };
+
+    UnicodeString getPositionForDebugging() const {
+        return pattern_.tempSubString(0, parsePosition_.getIndex()) + u"☞" +
+               pattern_.tempSubString(parsePosition_.getIndex(), 60);
     }
+
+    bool acceptSetOperator(char16_t op) {
+        if (lookahead().isSetOperator(op)) {
+            advance();
+            return true;
+        }
+        return false;
+    }
+
+    bool acceptStandInWithSymbol(char16_t op) {
+        if (lookahead().standIn() != nullptr && lookahead().sourceText_ == std::u16string_view(&op, 1)) {
+            advance();
+            return true;
+        }
+        return false;
+    }
+
+    const LexicalElement &lookahead() {
+        if (!ahead_.has_value()) {
+            const RuleCharacterIterator::Pos before = getPos();
+            ahead_.emplace(nextToken());
+            chars_.setPos(before);
+        }
+        return *ahead_;
+    }
+
+    const LexicalElement &lookahead2() {
+        if (!ahead2_.has_value()) {
+            // Note that if someone has called `getCharacterIterator` and played with the result,
+            // `before` may not actually be before `ahead_`, but we do not actually depend on this here,
+            // since we start from ahead_.after_.
+            const RuleCharacterIterator::Pos before = getPos();
+            chars_.setPos(lookahead().after_);
+            ahead2_.emplace(nextToken());
+            chars_.setPos(before);
+        }
+        return *ahead2_;
+    }
+
+    // For use in older functions that take the `RuleCharacterIterator` directly.
+    // Any advancement of the resulting `RuleCharacterIterator` has no effect on the result of subsequent
+    // calls to `lookahead`, `lookahead2`, `advance`, or `acceptSetOperator`.
+    // Once `advance` or `acceptSetOperator` has been called, the result of a call to
+    // `getCharacterIterator` preceding the call to `advance` or `acceptSetOperator` must no longer be
+    // used.
+    RuleCharacterIterator &getCharacterIterator() {
+        // Make sure we compute a correct `ahead_.after_` so we do not depend on the current value of
+        // `getPos()` for lexing.
+        lookahead();
+        return chars_;
+    }
+
+    int32_t charsOptions() {
+        return charsOptions_;
+    }
+
+    bool atEnd() const {
+        return chars_.atEnd();
+    }
+
+    void advance() {
+        // If someone called `getCharacterIterator`, we are now changing the character iterator under
+        // their feet; further, we may not have an `ahead_`, so if they keep playing with it we would be
+        // working on incorrect values of `getPos`.  This is why the result of `getCharacterIterator`
+        // must no longer be used.
+        chars_.setPos(lookahead().after_);
+        ahead_ = ahead2_;
+        ahead2_.reset();
+    }
+
+  private:
+    // A version of getPos that returns its position instead of taking it as at out parameter, so we
+    // can have const positions.
+    RuleCharacterIterator::Pos getPos() const {
+        RuleCharacterIterator::Pos result;
+        chars_.getPos(result);
+        return result;
+    }
+
+    LexicalElement nextToken() {
+        UErrorCode errorCode = U_ZERO_ERROR;
+        chars_.skipIgnored(charsOptions_);
+        if (chars_.atEnd()) {
+            return LexicalElement(LexicalElement::END_OF_TEXT, {}, getPos(), errorCode,
+                                  /*standIn=*/nullptr, u"");
+        }
+        const int32_t start = parsePosition_.getIndex();
+        const RuleCharacterIterator::Pos before = getPos();
+        // First try to get the next character without parsing escapes.
+        UBool unusedEscaped;
+        const UChar32 first =
+            chars_.next(charsOptions_ & ~RuleCharacterIterator::PARSE_ESCAPES, unusedEscaped, errorCode);
+        // '[', named-element, and property-query cannot be disabled by stand-in.
+        if (first == u'[' || first == u'\\') {
+            const RuleCharacterIterator::Pos afterFirst = getPos();
+            // This could be a property-query or named-element.
+            const UChar32 second = chars_.next(charsOptions_ & ~(RuleCharacterIterator::PARSE_ESCAPES |
+                                                                 RuleCharacterIterator::SKIP_WHITESPACE),
+                                               unusedEscaped, errorCode);
+            if ((first == u'[' && second == u':') ||
+                (first == u'\\' && (second == u'p' || second == u'P' || second == u'N'))) {
+                if (second == u'N') {
+                  scanNamedElementBrackets(errorCode);
+                  return LexicalElement(LexicalElement::NAMED_ELEMENT, {}, getPos(), errorCode,
+                                       /*standIn=*/nullptr,
+                                       std::u16string_view(pattern_).substr(
+                                           start, parsePosition_.getIndex() - start));
+                } else {
+                    scanPropertyQueryAfterStart(first, errorCode);
+                    return LexicalElement(
+                        LexicalElement::PROPERTY_QUERY, {}, getPos(), errorCode,
+                        /*standIn=*/nullptr,
+                        std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
+                }
+            }
+            // Not a property-query.
+            chars_.setPos(afterFirst);
+        }
+        if (first == u'[') {
+            return LexicalElement(
+                LexicalElement::SET_OPERATOR, UnicodeString(u'['), getPos(), errorCode,
+                /*standIn=*/nullptr,
+                std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
+        }
+
+        if (first == u'\\') {
+            // Now try to parse the escape.
+            chars_.setPos(before);
+            UChar32 codePoint = chars_.next(charsOptions_, unusedEscaped, errorCode);
+            const UnicodeSet *const standIn =
+                symbols_ == nullptr
+                    ? nullptr
+                    : dynamic_cast<const UnicodeSet *>(symbols_->lookupMatcher(codePoint));
+            return LexicalElement(
+                standIn == nullptr ? LexicalElement::ESCAPED_ELEMENT : LexicalElement::STAND_IN,
+                standIn == nullptr ? UnicodeString(codePoint) : UnicodeString(), getPos(), errorCode,
+                standIn, std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
+        }
+        if (symbols_ != nullptr) {
+            const UnicodeSet *const standIn =
+                dynamic_cast<const UnicodeSet *>(symbols_->lookupMatcher(first));
+            if (standIn != nullptr) {
+                return LexicalElement(
+                    LexicalElement::STAND_IN, {}, getPos(), errorCode, standIn,
+                    std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
+            }
+        }
+
+        switch (first) {
+        case u'&':
+        case u'-':
+        case u']':
+        case u'^':
+        case u'$':
+            // We make $ a set-operator to handle the ICU extensions involving $.
+            return LexicalElement(
+                LexicalElement::SET_OPERATOR, UnicodeString(first), getPos(), errorCode,
+                /*standIn=*/nullptr,
+                std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
+        case u'{': {
+            UnicodeString string;
+            UBool escaped;
+            UChar32 next;
+            int32_t codePointCount = 0;
+            while (!chars_.atEnd() && U_SUCCESS(errorCode)) {
+                next = chars_.next(charsOptions_, escaped, errorCode);
+                if (!escaped && next == u'}') {
+                    return LexicalElement(
+                        codePointCount == 1 ? LexicalElement::BRACKETED_ELEMENT
+                                            : LexicalElement::STRING_LITERAL,
+                        std::move(string), getPos(), errorCode,
+                        /*standIn=*/nullptr,
+                        std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
+                }
+                string.append(next);
+                codePointCount += 1;
+            }
+            return LexicalElement(
+                LexicalElement::STRING_LITERAL, {}, getPos(), U_MALFORMED_SET,
+                /*standIn=*/nullptr,
+                std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
+        }
+        default:
+            return LexicalElement(
+                LexicalElement::LITERAL_ELEMENT, UnicodeString(first), getPos(), errorCode, nullptr,
+                std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
+        }
+    }
+
+    void scanNamedElementBrackets(UErrorCode &errorCode) {
+        UBool unusedEscaped;
+        const UChar32 open = chars_.next(charsOptions_ & ~(RuleCharacterIterator::PARSE_ESCAPES |
+                                                           RuleCharacterIterator::SKIP_WHITESPACE),
+                                         unusedEscaped, errorCode);
+        if (open == u'{') {
+            while (!chars_.atEnd() && U_SUCCESS(errorCode)) {
+                UChar32 last = chars_.next(charsOptions_ & ~(RuleCharacterIterator::PARSE_ESCAPES |
+                                                             RuleCharacterIterator::SKIP_WHITESPACE),
+                                           unusedEscaped, errorCode);
+                if (last == u'}') {
+                    return;
+                }
+            }
+        }
+        if (U_SUCCESS(errorCode)) {
+            errorCode = U_ILLEGAL_ARGUMENT_ERROR;
+        }
+    }
+
+    void scanPropertyQueryAfterStart(UChar32 first, UErrorCode &errorCode) {
+        UBool unusedEscaped;
+        // Do not skip whitespace so we can recognize unspaced :].  Lex escapes and
+        // named-element: while ICU does not support string-valued properties and thus has no
+        // use for escapes, we still want to lex through escapes to allow downstream
+        // implementations (mostly unicodetools) to implement string-valued properties.
+        if (first == u'\\') {
+            const UChar32 third = chars_.next(charsOptions_ & ~(RuleCharacterIterator::PARSE_ESCAPES |
+                                                                RuleCharacterIterator::SKIP_WHITESPACE),
+                                              unusedEscaped, errorCode);
+            if (third != u'{') {
+                errorCode = U_ILLEGAL_ARGUMENT_ERROR;
+                return;
+            }
+        }
+        RuleCharacterIterator::Pos beforePenultimate = getPos();
+        UChar32 penultimateUnescaped =
+            chars_.next(charsOptions_ & ~(RuleCharacterIterator::PARSE_ESCAPES |
+                                          RuleCharacterIterator::SKIP_WHITESPACE),
+                        unusedEscaped, errorCode);
+
+        while (!chars_.atEnd() && U_SUCCESS(errorCode)) {
+            const RuleCharacterIterator::Pos beforeLast = getPos();
+            UChar32 lastUnescaped =
+                chars_.next(charsOptions_ & ~(RuleCharacterIterator::PARSE_ESCAPES |
+                                              RuleCharacterIterator::SKIP_WHITESPACE),
+                            unusedEscaped, errorCode);
+            if (penultimateUnescaped == u'\\') {
+                if (lastUnescaped == 'N') {
+                    scanNamedElementBrackets(errorCode);
+                    if (!U_SUCCESS(errorCode)) {
+                        return;
+                    }
+                } else {
+                    // There must be an escaped-element starting at beforePenultimate.  Go
+                    // back there and advance through it.
+                    chars_.setPos(beforePenultimate);
+                    chars_.next(charsOptions_ & ~RuleCharacterIterator::SKIP_WHITESPACE, unusedEscaped,
+                                errorCode);
+                }
+                // Neither a named-element nor an escaped-element can be part of a closing :].
+                lastUnescaped = -1;
+            } else if ((first == u'[' && penultimateUnescaped == u':' && lastUnescaped == u']') ||
+                       (first == u'\\' && lastUnescaped == u'}')) {
+                return;
+            }
+            beforePenultimate = beforeLast;
+            penultimateUnescaped = lastUnescaped;
+        }
+        errorCode = U_ILLEGAL_ARGUMENT_ERROR;
+        return;
+    }
+
+    const UnicodeString &pattern_;
+    const ParsePosition &parsePosition_;
+    RuleCharacterIterator &chars_;
+    const int32_t charsOptions_;
+    const SymbolTable *const symbols_;
+    std::optional<LexicalElement> ahead_;
+    std::optional<LexicalElement> ahead2_;
 };
 
+namespace {
+
 constexpr int32_t MAX_DEPTH = 100;
+
+#if U_DEBUGGING_UNICODESET_PARSING
+
+#define U_UNICODESET_RETURN_IF_ERROR(ec)                                                                \
+    do {                                                                                                \
+    constexpr std::string_view functionName = __func__;\
+    static_assert (functionName.substr(0, 5) == "parse");\
+        if (U_FAILURE(ec)) {                                                                            \
+            if (depth < 5) {                                                                            \
+                printf("--- in %s l. %d\n", __func__+5, __LINE__);                                        \
+            } else if (depth == 5 && std::string_view(__func__+5) == "UnicodeSet") {                 \
+                printf("--- [...]\n");                                                                  \
+            }                                                                                           \
+            return;                                                                                     \
+        }                                                                                               \
+    } while (false)
+#define U_UNICODESET_RETURN_WITH_PARSE_ERROR(expected, actual, lexer, ec)                               \
+    do {                                                                                                \
+        constexpr std::string_view functionName = __func__;                                             \
+        static_assert(functionName.substr(0, 5) == "parse");                                            \
+        std::string actualUTF8;                                                                         \
+        std::string contextUTF8;                                                                        \
+        printf("*** Expected %s, got %s %s\n", (expected),                                              \
+               UnicodeString(actual).toUTF8String(actualUTF8).c_str(),                                  \
+               lexer.getPositionForDebugging().toUTF8String(contextUTF8).c_str());                      \
+        printf("--- in %s l. %d\n", __func__ + 5, __LINE__);                                            \
+        if (U_FAILURE(lexer.lookahead().errorCode())) {                                                 \
+            (ec) = lexer.lookahead().errorCode();                                                       \
+        } else {                                                                                        \
+            (ec) = U_MALFORMED_SET;                                                                     \
+        }                                                                                               \
+        return;                                                                                         \
+    } while (false)
+
+#else
+
+#define U_UNICODESET_RETURN_IF_ERROR(ec)                                                                \
+    do {                                                                                                \
+        if (U_FAILURE(ec)) {                                                                            \
+            return;                                                                                     \
+        }                                                                                               \
+    } while (false)
+#define U_UNICODESET_RETURN_WITH_PARSE_ERROR(expected, actual, lexer, ec)                               \
+    do {                                                                                                \
+        if (U_FAILURE(lexer.lookahead().errorCode())) {                                                 \
+            (ec) = lexer.lookahead().errorCode();                                                       \
+        } else {                                                                                        \
+            (ec) = U_MALFORMED_SET;                                                                     \
+        }                                                                                               \
+        return;                                                                                         \
+    } while (false)
+
+#endif
 
 }  // namespace
 
 /**
  * Parse the pattern from the given RuleCharacterIterator.  The
  * iterator is advanced over the parsed pattern.
+ * @param pattern The pattern, only used by debug traces.
+ * @param parsePosition The ParsePosition underlying chars, only used by debug traces.
  * @param chars iterator over the pattern characters.  Upon return
  * it will be advanced to the first character after the parsed
  * pattern, or the end of the iteration if all characters are
@@ -258,378 +695,93 @@ constexpr int32_t MAX_DEPTH = 100;
  * @param options a bit mask of zero or more of the following:
  * IGNORE_SPACE, CASE.
  */
-void UnicodeSet::applyPattern(RuleCharacterIterator& chars,
-                              const SymbolTable* symbols,
-                              UnicodeString& rebuiltPat,
+
+void UnicodeSet::applyPattern(const UnicodeString &pattern,
+                              const ParsePosition &parsePosition,
+                              RuleCharacterIterator &chars,
+                              const SymbolTable *symbols,
+                              UnicodeString &rebuiltPat,
                               uint32_t options,
-                              UnicodeSet& (UnicodeSet::*caseClosure)(int32_t attribute),
-                              int32_t depth,
-                              UErrorCode& ec) {
+                              UnicodeSet &(UnicodeSet::*caseClosure)(int32_t attribute),
+                              UErrorCode &ec) {
     if (U_FAILURE(ec)) return;
-    if (depth > MAX_DEPTH) {
-        ec = U_ILLEGAL_ARGUMENT_ERROR;
-        return;
-    }
+    Lexer lexer(pattern, parsePosition, chars, options, symbols);
+    parseUnicodeSet(lexer, rebuiltPat, options, caseClosure, /*depth=*/0, ec);
+}
 
-    // Syntax characters: [ ] ^ - & { }
-
-    // Recognized special forms for chars, sets: c-c s-s s&s
-
-    int32_t opts = RuleCharacterIterator::PARSE_VARIABLES |
-                   RuleCharacterIterator::PARSE_ESCAPES;
-    if ((options & USET_IGNORE_SPACE) != 0) {
-        opts |= RuleCharacterIterator::SKIP_WHITESPACE;
-    }
-
-    UnicodeString patLocal, buf;
-    UBool usePat = false;
-    UnicodeSetPointer scratch;
-    RuleCharacterIterator::Pos backup;
-
-    // mode: 0=before [, 1=between [...], 2=after ]
-    // lastItem: 0=none, 1=char, 2=set
-    int8_t lastItem = 0, mode = 0;
-    UChar32 lastChar = 0;
-    char16_t op = 0;
-
-    UBool invert = false;
-
+void UnicodeSet::parseUnicodeSet(Lexer &lexer,
+                                 UnicodeString& rebuiltPat,
+                                 uint32_t options,
+                                 UnicodeSet& (UnicodeSet::*caseClosure)(int32_t attribute),
+                                 int32_t depth,
+                                 UErrorCode &ec) {
     clear();
 
-    while (mode != 2 && !chars.atEnd()) {
-        U_ASSERT((lastItem == 0 && op == 0) ||
-                 (lastItem == 1 && (op == 0 || op == u'-')) ||
-                 (lastItem == 2 && (op == 0 || op == u'-' || op == u'&')));
+    if (depth > MAX_DEPTH) {
+        U_UNICODESET_RETURN_WITH_PARSE_ERROR(("depth <= " + std::to_string(MAX_DEPTH)).c_str(),
+                                             ("depth = " + std::to_string(depth)).c_str(), lexer, ec);
+    }
 
-        UChar32 c = 0;
-        UBool literal = false;
-        UnicodeSet* nested = nullptr; // alias - do not delete
-
-        // -------- Check for property pattern
-
-        // setMode: 0=none, 1=unicodeset, 2=propertypat, 3=preparsed
-        int8_t setMode = 0;
-        if (resemblesPropertyPattern(chars, opts)) {
-            setMode = 2;
-        }
-
-        // -------- Parse '[' of opening delimiter OR nested set.
-        // If there is a nested set, use `setMode' to define how
-        // the set should be parsed.  If the '[' is part of the
-        // opening delimiter for this pattern, parse special
-        // strings "[", "[^", "[-", and "[^-".  Check for stand-in
-        // characters representing a nested set in the symbol
-        // table.
-
-        else {
-            // Prepare to backup if necessary
-            chars.getPos(backup);
-            c = chars.next(opts, literal, ec);
-            if (U_FAILURE(ec)) return;
-
-            if (c == u'[' && !literal) {
-                if (mode == 1) {
-                    chars.setPos(backup); // backup
-                    setMode = 1;
-                } else {
-                    // Handle opening '[' delimiter
-                    mode = 1;
-                    patLocal.append(u'[');
-                    chars.getPos(backup); // prepare to backup
-                    c = chars.next(opts, literal, ec); 
-                    if (U_FAILURE(ec)) return;
-                    if (c == u'^' && !literal) {
-                        invert = true;
-                        patLocal.append(u'^');
-                        chars.getPos(backup); // prepare to backup
-                        c = chars.next(opts, literal, ec);
-                        if (U_FAILURE(ec)) return;
-                    }
-                    // Fall through to handle special leading '-';
-                    // otherwise restart loop for nested [], \p{}, etc.
-                    if (c == u'-') {
-                        literal = true;
-                        // Fall through to handle literal '-' below
-                    } else {
-                        chars.setPos(backup); // backup
-                        continue;
-                    }
-                }
-            } else if (symbols != nullptr) {
-                const UnicodeFunctor *m = symbols->lookupMatcher(c);
-                if (m != nullptr) {
-                    const UnicodeSet *ms = dynamic_cast<const UnicodeSet *>(m);
-                    if (ms == nullptr) {
-                        ec = U_MALFORMED_SET;
-                        return;
-                    }
-                    // casting away const, but `nested' won't be modified
-                    // (important not to modify stored set)
-                    nested = const_cast<UnicodeSet*>(ms);
-                    setMode = 3;
-                }
+    bool isComplement = false;
+    // Whether to keep the syntax of the pattern at this level, only doing basic pretty-printing, e.g.,
+    // turn [ c - z[a]a - b ] into [c-z[a]a-b], but not into [a-z].
+    // This is true for a property query, or when there is a nested set.  Note that since we recurse,
+    // innermost sets consisting only of ranges will get simplified.
+    bool preserveSyntaxInPattern = false;
+    // A pattern that preserves the original syntax but strips spaces, normalizes escaping, etc.
+    UnicodeString prettyPrintedPattern;
+    if (lexer.lookahead().isPropertyQuery() || lexer.lookahead().isNamedElement()) {
+        // UnicodeSet ::= property-query | named-element
+        // NOTE(egg): For now, we ignore the work that the lexer did to find out where the
+        // property-query or named-element ended in order to retain the existing buggy behaviour of
+        // variables containing property queries.
+        lexer.getCharacterIterator().skipIgnored(lexer.charsOptions());
+        UnicodeSet propertyQuery;
+        propertyQuery.applyPropertyPattern(lexer.getCharacterIterator(), prettyPrintedPattern, ec);
+        U_UNICODESET_RETURN_IF_ERROR(ec);
+        // But now, we go back to our lexing and advance through the property-query or named-element as
+        // lexed.  If there was no error, the old and the new code should agree on the extent.
+        lexer.advance();
+        addAll(propertyQuery);
+        preserveSyntaxInPattern = true;
+    } else {
+        // UnicodeSet ::=                [   Union ]
+        //              | Complement ::= [ ^ Union ]
+        // Extension:
+        //              | stand-in
+        // Where a stand-in may be a character or an escape.
+        // Strings that would match stand-in effectively get removed from
+        // all other terminals of the grammar, except [.
+        // When mapped by the symbol table, whether ^ and - are treated as set operators depends on where
+        // in the grammar we are, hence `acceptStandInWithSymbol`.
+        if (lexer.acceptSetOperator(u'[')) {
+            prettyPrintedPattern.append(u'[');
+            if (lexer.acceptSetOperator(u'^') || lexer.acceptStandInWithSymbol(u'^')) {
+                prettyPrintedPattern.append(u'^');
+                isComplement = true;
             }
-        }
-
-        // -------- Handle a nested set.  This either is inline in
-        // the pattern or represented by a stand-in that has
-        // previously been parsed and was looked up in the symbol
-        // table.
-
-        if (setMode != 0) {
-            if (lastItem == 1) {
-                if (op != 0) {
-                    // syntaxError(chars, "Char expected after operator");
-                    ec = U_MALFORMED_SET;
-                    return;
-                }
-                add(lastChar, lastChar);
-                _appendToPat(patLocal, lastChar, false);
-                lastItem = 0;
-                op = 0;
+            parseUnion(lexer, prettyPrintedPattern, options, caseClosure, depth,
+                       /*containsRestrictions=*/preserveSyntaxInPattern, ec);
+            U_UNICODESET_RETURN_IF_ERROR(ec);
+            if (!lexer.acceptSetOperator(u']')) {
+                U_UNICODESET_RETURN_WITH_PARSE_ERROR("]", lexer.lookahead().debugString(), lexer, ec);
             }
-
-            if (op == u'-' || op == u'&') {
-                patLocal.append(op);
-            }
-
-            if (nested == nullptr) {
-                // lazy allocation
-                if (!scratch.allocate()) {
-                    ec = U_MEMORY_ALLOCATION_ERROR;
-                    return;
-                }
-                nested = scratch.pointer();
-            }
-            switch (setMode) {
-            case 1:
-                nested->applyPattern(chars, symbols, patLocal, options, caseClosure, depth + 1, ec);
-                break;
-            case 2:
-                chars.skipIgnored(opts);
-                nested->applyPropertyPattern(chars, patLocal, ec);
-                if (U_FAILURE(ec)) return;
-                break;
-            case 3: // `nested' already parsed
-                nested->_toPattern(patLocal, false);
-                break;
-            }
-
-            usePat = true;
-
-            if (mode == 0) {
-                // Entire pattern is a category; leave parse loop
-                *this = *nested;
-                mode = 2;
-                break;
-            }
-
-            switch (op) {
-            case u'-':
-                removeAll(*nested);
-                break;
-            case u'&':
-                retainAll(*nested);
-                break;
-            case 0:
-                addAll(*nested);
-                break;
-            }
-
-            op = 0;
-            lastItem = 2;
-
-            continue;
-        }
-
-        if (mode == 0) {
-            // syntaxError(chars, "Missing '['");
-            ec = U_MALFORMED_SET;
+            prettyPrintedPattern.append(u']');
+        } else if (const UnicodeSet *const standIn = lexer.lookahead().standIn();
+                   standIn != nullptr) {
+            *this = *standIn;
+            this->_toPattern(rebuiltPat, /*escapeUnprintable=*/false);
+            lexer.advance();
             return;
-        }
-
-        // -------- Parse special (syntax) characters.  If the
-        // current character is not special, or if it is escaped,
-        // then fall through and handle it below.
-
-        if (!literal) {
-            switch (c) {
-            case u']':
-                if (lastItem == 1) {
-                    add(lastChar, lastChar);
-                    _appendToPat(patLocal, lastChar, false);
-                }
-                // Treat final trailing '-' as a literal
-                if (op == u'-') {
-                    add(op, op);
-                    patLocal.append(op);
-                } else if (op == u'&') {
-                    // syntaxError(chars, "Trailing '&'");
-                    ec = U_MALFORMED_SET;
-                    return;
-                }
-                patLocal.append(u']');
-                mode = 2;
-                continue;
-            case u'-':
-                if (op == 0) {
-                    if (lastItem != 0) {
-                        op = static_cast<char16_t>(c);
-                        continue;
-                    } else {
-                        // Treat final trailing '-' as a literal
-                        add(c, c);
-                        c = chars.next(opts, literal, ec);
-                        if (U_FAILURE(ec)) return;
-                        if (c == u']' && !literal) {
-                            patLocal.append(u"-]", 2);
-                            mode = 2;
-                            continue;
-                        }
-                    }
-                }
-                // syntaxError(chars, "'-' not after char or set");
-                ec = U_MALFORMED_SET;
-                return;
-            case u'&':
-                if (lastItem == 2 && op == 0) {
-                    op = static_cast<char16_t>(c);
-                    continue;
-                }
-                // syntaxError(chars, "'&' not after set");
-                ec = U_MALFORMED_SET;
-                return;
-            case u'^':
-                // syntaxError(chars, "'^' not after '['");
-                ec = U_MALFORMED_SET;
-                return;
-            case u'{':
-                if (op != 0) {
-                    // syntaxError(chars, "Missing operand after operator");
-                    ec = U_MALFORMED_SET;
-                    return;
-                }
-                if (lastItem == 1) {
-                    add(lastChar, lastChar);
-                    _appendToPat(patLocal, lastChar, false);
-                }
-                lastItem = 0;
-                buf.truncate(0);
-                {
-                    UBool ok = false;
-                    while (!chars.atEnd()) {
-                        c = chars.next(opts, literal, ec);
-                        if (U_FAILURE(ec)) return;
-                        if (c == u'}' && !literal) {
-                            ok = true;
-                            break;
-                        }
-                        buf.append(c);
-                    }
-                    if (!ok) {
-                        // syntaxError(chars, "Invalid multicharacter string");
-                        ec = U_MALFORMED_SET;
-                        return;
-                    }
-                }
-                // We have new string. Add it to set and continue;
-                // we don't need to drop through to the further
-                // processing
-                add(buf);
-                patLocal.append(u'{');
-                _appendToPat(patLocal, buf, false);
-                patLocal.append(u'}');
-                continue;
-            case SymbolTable::SYMBOL_REF:
-                //         symbols  nosymbols
-                // [a-$]   error    error (ambiguous)
-                // [a$]    anchor   anchor
-                // [a-$x]  var "x"* literal '$'
-                // [a-$.]  error    literal '$'
-                // *We won't get here in the case of var "x"
-                {
-                    chars.getPos(backup);
-                    c = chars.next(opts, literal, ec);
-                    if (U_FAILURE(ec)) return;
-                    UBool anchor = (c == u']' && !literal);
-                    if (symbols == nullptr && !anchor) {
-                        c = SymbolTable::SYMBOL_REF;
-                        chars.setPos(backup);
-                        break; // literal '$'
-                    }
-                    if (anchor && op == 0) {
-                        if (lastItem == 1) {
-                            add(lastChar, lastChar);
-                            _appendToPat(patLocal, lastChar, false);
-                        }
-                        add(U_ETHER);
-                        usePat = true;
-                        patLocal.append(static_cast<char16_t>(SymbolTable::SYMBOL_REF));
-                        patLocal.append(u']');
-                        mode = 2;
-                        continue;
-                    }
-                    // syntaxError(chars, "Unquoted '$'");
-                    ec = U_MALFORMED_SET;
-                    return;
-                }
-            default:
-                break;
-            }
-        }
-
-        // -------- Parse literal characters.  This includes both
-        // escaped chars ("\u4E01") and non-syntax characters
-        // ("a").
-
-        switch (lastItem) {
-        case 0:
-            lastItem = 1;
-            lastChar = c;
-            break;
-        case 1:
-            if (op == u'-') {
-                if (lastChar >= c) {
-                    // Don't allow redundant (a-a) or empty (b-a) ranges;
-                    // these are most likely typos.
-                    // syntaxError(chars, "Invalid range");
-                    ec = U_MALFORMED_SET;
-                    return;
-                }
-                add(lastChar, c);
-                _appendToPat(patLocal, lastChar, false);
-                patLocal.append(op);
-                _appendToPat(patLocal, c, false);
-                lastItem = 0;
-                op = 0;
-            } else {
-                add(lastChar, lastChar);
-                _appendToPat(patLocal, lastChar, false);
-                lastChar = c;
-            }
-            break;
-        case 2:
-            if (op != 0) {
-                // syntaxError(chars, "Set expected after operator");
-                ec = U_MALFORMED_SET;
-                return;
-            }
-            lastChar = c;
-            lastItem = 1;
-            break;
+        } else {
+            U_UNICODESET_RETURN_WITH_PARSE_ERROR(R"([: | \p | \P | \N | [)",
+                                                 lexer.lookahead().debugString(), lexer,
+                                                 ec);
         }
     }
-
-    if (mode != 2) {
-        // syntaxError(chars, "Missing ']'");
-        ec = U_MALFORMED_SET;
-        return;
-    }
-
-    chars.skipIgnored(opts);
 
     /**
-     * Handle global flags (invert, case insensitivity).  If this
+     * Handle global flags (isComplement, case insensitivity).  If this
      * pattern should be compiled case-insensitive, then we need
      * to close over case BEFORE COMPLEMENTING.  This makes
      * patterns like /[^abc]/i work.
@@ -637,21 +789,216 @@ void UnicodeSet::applyPattern(RuleCharacterIterator& chars,
     if ((options & USET_CASE_MASK) != 0) {
         (this->*caseClosure)(options);
     }
-    if (invert) {
+    if (isComplement) {
         complement().removeAllStrings();  // code point complement
     }
-
-    // Use the rebuilt pattern (patLocal) only if necessary.  Prefer the
-    // generated pattern.
-    if (usePat) {
-        rebuiltPat.append(patLocal);
+    if (preserveSyntaxInPattern) {
+        rebuiltPat.append(prettyPrintedPattern);
     } else {
-        _generatePattern(rebuiltPat, false);
+        _generatePattern(rebuiltPat, /*escapeUnprintable=*/false);
     }
-    if (isBogus() && U_SUCCESS(ec)) {
-        // We likely ran out of memory. AHHH!
-        ec = U_MEMORY_ALLOCATION_ERROR;
+}
+
+void UnicodeSet::parseUnion(Lexer &lexer,
+                            UnicodeString &rebuiltPat,
+                            uint32_t options,
+                            UnicodeSet &(UnicodeSet::*caseClosure)(int32_t attribute),
+                            int32_t depth,
+                            bool &containsRestrictions,
+                            UErrorCode &ec) {
+    // Union ::= Terms
+    //         | UnescapedHyphenMinus Terms
+    //         | Terms UnescapedHyphenMinus
+    //         | UnescapedHyphenMinus Terms UnescapedHyphenMinus
+    // Terms ::= ""
+    //         | Terms Term
+    if (lexer.acceptSetOperator(u'-') || lexer.acceptStandInWithSymbol(u'-')) {
+        add(u'-');
+        // When we otherwise preserve the syntax, we escape an initial UnescapedHyphenMinus, but not a
+        // final one, for consistency with older ICU behaviour.
+        rebuiltPat.append(u"\\-");
     }
+    while (!lexer.atEnd()) {
+        // Note that while a HYPHEN-MINUS mapped by the symbol table is treated as a literal at the
+        // beginning of the Union, it is treated as a set elsewhere, including at the end.
+        if (lexer.acceptSetOperator(u'-')) {
+            // We can be here on the first iteration: [--] is allowed by the
+            // grammar and by the old parser.
+            rebuiltPat.append(u'-');
+            add(u'-');
+            return;
+        } else if (lexer.lookahead().isSetOperator(u'$')) {
+            if (lexer.lookahead2().isSetOperator(u']')) {
+                // ICU extensions: A $ is allowed as a literal-element.
+                // A Term at the end of a Union consisting of a single $ is an anchor.
+                rebuiltPat.append(u'$');
+                // Consume the dollar.
+                lexer.advance();
+                add(U_ETHER);
+                containsRestrictions = true;
+                return;
+            }
+        }
+        if (lexer.lookahead().isSetOperator(u']')) {
+            return;
+        }
+        parseTerm(lexer, rebuiltPat, options, caseClosure, depth, containsRestrictions, ec);
+        U_UNICODESET_RETURN_IF_ERROR(ec);
+    }
+}
+
+void UnicodeSet::parseTerm(Lexer &lexer,
+                           UnicodeString &rebuiltPat,
+                           uint32_t options,
+                           UnicodeSet &(UnicodeSet::*caseClosure)(int32_t attribute),
+                           int32_t depth,
+                           bool &containsRestriction,
+                           UErrorCode &ec) {
+    // Term ::= Elements
+    //        | Restriction
+    if (lexer.lookahead().standIn() != nullptr || lexer.lookahead().isSetOperator('[') ||
+        lexer.lookahead().isPropertyQuery() || lexer.lookahead().isNamedElement()) {
+        containsRestriction = true;
+        parseRestriction(lexer, rebuiltPat, options, caseClosure, depth, ec);
+        U_UNICODESET_RETURN_IF_ERROR(ec);
+    } else {
+        parseElements(lexer, rebuiltPat, ec);
+        U_UNICODESET_RETURN_IF_ERROR(ec);
+    }
+}
+
+void UnicodeSet::parseRestriction(Lexer &lexer,
+                                  UnicodeString &rebuiltPat,
+                                  uint32_t options,
+                                  UnicodeSet &(UnicodeSet::*caseClosure)(int32_t attribute),
+                                  int32_t depth,
+                                  UErrorCode &ec) {
+    // Parse a https://www.unicode.org/reports/tr61/#Restriction:
+    //   Restriction  ::= UnicodeSet
+    //                  | Intersection
+    //                  | Difference
+    //   Intersection ::= Restriction & UnicodeSet
+    //   Difference   ::= Restriction - UnicodeSet
+    // or, rewritten to be LL,
+    //   Restriction    ::= UnicodeSet RightHandSides
+    //   RightHandSides ::= ""
+    //                    | & UnicodeSet RightHandSides
+    //                    | - UnicodeSet RightHandSides
+    // but note that the tree resulting from this LL version is not an expression tree: the
+    // operations are left-associative.
+    // Start by parsing the first UnicodeSet.
+    UnicodeSet leftHandSide;
+    leftHandSide.parseUnicodeSet(lexer, rebuiltPat, options, caseClosure, depth + 1, ec);
+    addAll(leftHandSide);
+    U_UNICODESET_RETURN_IF_ERROR(ec);
+    // Now keep looking for an operator that would continue the RightHandSide.
+    // The loop terminates because when we run out of source text, the lookahead token will not be a set
+    // operator, so that we hit the else branch and return.
+    for (;;) {
+        if (lexer.acceptSetOperator(u'&')) {
+            // Intersection ::= Restriction & UnicodeSet
+            rebuiltPat.append(u'&');
+            UnicodeSet rightHandSide;
+            rightHandSide.parseUnicodeSet(lexer, rebuiltPat, options, caseClosure, depth + 1, ec);
+            U_UNICODESET_RETURN_IF_ERROR(ec);
+            retainAll(rightHandSide);
+        } else if (lexer.lookahead().isSetOperator(u'-')) {
+            // Here the grammar requires two tokens of lookahead to figure out whether the - is the operator
+            // of a Difference or an UnescapedHyphenMinus in the enclosing Union.
+            if (lexer.lookahead2().isSetOperator(u']')) {
+                // The operator is actually an UnescapedHyphenMinus; terminate the Restriction
+                // before it.  We return to parseTerm, which immediately returns to parseUnion,
+                // which will accept the - and add it to *this.
+                return;
+            }
+            // Consume the hyphen-minus.
+            lexer.advance();
+            // Difference ::= Restriction - UnicodeSet
+            rebuiltPat.append(u'-');
+            UnicodeSet rightHandSide;
+            rightHandSide.parseUnicodeSet(lexer, rebuiltPat, options, caseClosure, depth + 1, ec);
+            U_UNICODESET_RETURN_IF_ERROR(ec);
+            removeAll(rightHandSide);
+        } else {
+            // Not an operator, end of the Restriction.
+            return;
+        }
+    }
+}
+
+void UnicodeSet::parseElements(Lexer &lexer,
+                               UnicodeString &rebuiltPat,
+                               UErrorCode &ec) {
+    // Elements     ::= Element
+    //                | Range
+    // Range        ::= RangeElement - RangeElement
+    // RangeElement ::= literal-element
+    //                | escaped-element
+    // Element      ::= RangeElement
+    //                | string-literal
+    //                | bracketed-element
+    if (lexer.lookahead().isBracketedElement() || lexer.lookahead().isStringLiteral()) {
+        add(*lexer.lookahead().element());
+        rebuiltPat.append(u'{');
+        _appendToPat(rebuiltPat, *lexer.lookahead().element(), /*escapeUnprintable=*/false);
+        rebuiltPat.append(u'}');
+        lexer.advance();
+        return;
+    }
+    UChar32 first;
+    if (lexer.lookahead().isSetOperator(u'$')) {
+        // Disallowed by UTS #61, but historically accepted by ICU.  This is an extension.
+        first = u'$';
+    } else if (lexer.lookahead().codePoint().has_value()) {
+        first = *lexer.lookahead().codePoint();
+    } else {
+        U_UNICODESET_RETURN_WITH_PARSE_ERROR("RangeElement | string-literal | bracketed-element",
+                                             lexer.lookahead().debugString(),
+                                             lexer, ec);
+    }
+    lexer.advance();
+    _appendToPat(rebuiltPat, first, /*escapeUnprintable=*/false);
+    if (!lexer.lookahead().isSetOperator(u'-')) {
+        // No operator,
+        // Elements ::= Element
+        add(first);
+        return;
+    }
+    // Here the grammar requires two tokens of lookahead to figure out whether the - is the operator
+    // of a Range or an UnescapedHyphenMinus in the enclosing Union.
+    if (lexer.lookahead2().isSetOperator(u']')) {
+        // The operator is actually an UnescapedHyphenMinus; terminate the Elements before it.
+        add(first);
+        return;
+    }
+    // Consume the hyphen-minus.
+    lexer.advance();
+    // Elements ::= Range ::= RangeElement - RangeElement
+    rebuiltPat.append(u'-');
+    UChar32 last;
+    if (lexer.lookahead().isSetOperator(u'$')) {
+        // Disallowed by UTS #61, but historically accepted by ICU except at the end of a Union.
+        // This is an extension.
+        last = u'$';
+        if (lexer.lookahead2().isSetOperator(u']')) {
+            U_UNICODESET_RETURN_WITH_PARSE_ERROR("Term after Range ending in unescaped $",
+                                                 lexer.lookahead().debugString() + u" followed by " +
+                                                     lexer.lookahead2().debugString(),
+                                                 lexer, ec);
+        }
+    } else if (lexer.lookahead().codePoint().has_value()) {
+        last = *lexer.lookahead().codePoint();
+    } else {
+        U_UNICODESET_RETURN_WITH_PARSE_ERROR("RangeElement", lexer.lookahead().debugString(), lexer, ec);
+    }
+    if (last <= first) {
+        U_UNICODESET_RETURN_WITH_PARSE_ERROR(
+            "first < last in Range", UnicodeString(last) + u"-" + UnicodeString(first), lexer, ec);
+    }
+    lexer.advance();
+    _appendToPat(rebuiltPat, last, /*escapeUnprintable=*/false);
+    add(first, last);
+    return;
 }
 
 //----------------------------------------------------------------
@@ -1000,33 +1347,6 @@ UBool UnicodeSet::resemblesPropertyPattern(const UnicodeString& pattern,
 
     // Look for an opening [:, [:^, \p, or \P
     return isPOSIXOpen(pattern, pos) || isPerlOpen(pattern, pos) || isNameOpen(pattern, pos);
-}
-
-/**
- * Return true if the given iterator appears to point at a
- * property pattern.  Regardless of the result, return with the
- * iterator unchanged.
- * @param chars iterator over the pattern characters.  Upon return
- * it will be unchanged.
- * @param iterOpts RuleCharacterIterator options
- */
-UBool UnicodeSet::resemblesPropertyPattern(RuleCharacterIterator& chars,
-                                           int32_t iterOpts) {
-    // NOTE: literal will always be false, because we don't parse escapes.
-    UBool result = false, literal;
-    UErrorCode ec = U_ZERO_ERROR;
-    iterOpts &= ~RuleCharacterIterator::PARSE_ESCAPES;
-    RuleCharacterIterator::Pos pos;
-    chars.getPos(pos);
-    UChar32 c = chars.next(iterOpts, literal, ec);
-    if (c == u'[' || c == u'\\') {
-        UChar32 d = chars.next(iterOpts & ~RuleCharacterIterator::SKIP_WHITESPACE,
-                               literal, ec);
-        result = (c == u'[') ? (d == u':') :
-                               (d == u'N' || d == u'p' || d == u'P');
-    }
-    chars.setPos(pos);
-    return result && U_SUCCESS(ec);
 }
 
 /**

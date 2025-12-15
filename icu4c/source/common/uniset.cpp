@@ -241,7 +241,7 @@ UnicodeSet& UnicodeSet::copyFrom(const UnicodeSet& o, UBool asThawed) {
     } else if (hasStrings()) {
         strings_->removeAllElements();
     }
-    if (o.stringSpan != nullptr && !asThawed) {
+    if (o.stringSpan != nullptr && strings_ != nullptr && !asThawed) {
         stringSpan = new UnicodeSetStringSpan(*o.stringSpan, *strings_);
         if (stringSpan == nullptr) { // Check for memory allocation error.
             setToBogus();

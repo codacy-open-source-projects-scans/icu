@@ -877,6 +877,10 @@ _fromUnicodeWithCallback(UConverterFromUnicodeArgs *pArgs, UErrorCode *err) {
          * and failed to consume all of them.
          * We need to "replay" them from a temporary buffer and convert them first.
          */
+        if (!pArgs->source) {
+            *err=U_ILLEGAL_ARGUMENT_ERROR;
+            return;
+        }
         realSource=pArgs->source;
         realSourceLimit=pArgs->sourceLimit;
         realFlush=pArgs->flush;
@@ -1322,6 +1326,10 @@ _toUnicodeWithCallback(UConverterToUnicodeArgs *pArgs, UErrorCode *err) {
          * and failed to consume all of them.
          * We need to "replay" them from a temporary buffer and convert them first.
          */
+        if (!pArgs->source) {
+            *err=U_ILLEGAL_ARGUMENT_ERROR;
+            return;
+        }
         realSource=pArgs->source;
         realSourceLimit=pArgs->sourceLimit;
         realFlush=pArgs->flush;

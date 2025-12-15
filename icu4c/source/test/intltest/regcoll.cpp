@@ -1249,6 +1249,12 @@ void CollationRegressionTest::TestBeforeWithTooStrongAfter() {
     }
 }
 
+void CollationRegressionTest::TestICU23280IntOverFlow() {
+    UErrorCode status = U_ZERO_ERROR;
+    icu::LocalPointer<icu::RuleBasedCollator> col1(
+        new icu::RuleBasedCollator(u"&＠<*񏼠-󏼠 ", status));
+}
+
 void CollationRegressionTest::TestICU22555InfinityLoop() {
     char16_t data[] = {
         0x0020, 0x0026, 0x4000, 0x002c, 0x6601, 0x0106, 0xff7f, 0xff99,
@@ -1441,6 +1447,7 @@ void CollationRegressionTest::runIndexedTest(int32_t index, UBool exec, const ch
     TESTCASE_AUTO(TestICU22277);
     TESTCASE_AUTO(TestICU22517);
     TESTCASE_AUTO(TestICU22555InfinityLoop);
+    TESTCASE_AUTO(TestICU23280IntOverFlow);
     TESTCASE_AUTO_END;
 }
 

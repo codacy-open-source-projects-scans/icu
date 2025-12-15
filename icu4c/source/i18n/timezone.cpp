@@ -739,7 +739,9 @@ void TimeZone::getOffset(UDate date, UBool local, int32_t& rawOffset,
                               static_cast<uint8_t>(dow), millis,
                               Grego::monthLength(year, month),
                               ec) - rawOffset;
-
+        if (U_FAILURE(ec)) {
+            return;
+        }
         // Recompute if local==true, dstOffset!=0.
         if (pass!=0 || !local || dstOffset == 0) {
             break;

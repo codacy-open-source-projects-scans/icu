@@ -1694,13 +1694,58 @@ private:
                                  const SymbolTable* symbols,
                                  UErrorCode& status);
 
-    void applyPattern(RuleCharacterIterator& chars,
-                      const SymbolTable* symbols,
-                      UnicodeString& rebuiltPat,
+    void applyPattern(const UnicodeString &pattern,
+                      const ParsePosition& parsePosition,
+                      RuleCharacterIterator &chars,
+                      const SymbolTable *symbols,
+                      UnicodeString &rebuiltPat,
                       uint32_t options,
-                      UnicodeSet& (UnicodeSet::*caseClosure)(int32_t attribute),
-                      int32_t depth,
-                      UErrorCode& ec);
+                      UnicodeSet &(UnicodeSet::*caseClosure)(int32_t attribute),
+                      UErrorCode &ec);
+
+    // Recursive-descent predictive parsing.  These functions parse the syntactic categories
+    // matching their name in the base grammar of PD UTR #56 (before the highlighted changes are
+    // applied).
+    // See https://www.unicode.org/reports/tr61/tr61-1.html#Set-Operations.
+    // `parseUnicodeSet` clears `*this` and makes it represent the parsed UnicodeSet; all other functions
+    // add the set represented by the parsed construct to `*this`.
+
+    class Lexer;
+
+    void parseUnicodeSet(Lexer &lexer,
+                         UnicodeString &rebuiltPat,
+                         uint32_t options,
+                         UnicodeSet &(UnicodeSet::*caseClosure)(int32_t attribute),
+                         int32_t depth,
+                         UErrorCode &ec);
+
+    void parseUnion(Lexer &lexer,
+                    UnicodeString &rebuiltPat,
+                    uint32_t options,
+                    UnicodeSet &(UnicodeSet::*caseClosure)(int32_t attribute),
+                    int32_t depth,
+                    bool &containsRestrictions,
+                    UErrorCode &ec);
+
+    void parseTerm(Lexer &lexer,
+                   UnicodeString &rebuiltPat,
+                   uint32_t options,
+                   UnicodeSet &(UnicodeSet::*caseClosure)(int32_t attribute),
+                   int32_t depth,
+                   bool &containsRestrictions,
+                   UErrorCode &ec);
+
+    void parseRestriction(Lexer &lexer,
+                          UnicodeString &rebuiltPat,
+                          uint32_t options,
+                          UnicodeSet &(UnicodeSet::*caseClosure)(int32_t attribute),
+                          int32_t depth,
+                          UErrorCode &ec);
+
+    void parseElements(Lexer &lexer,
+                       UnicodeString &rebuiltPat,
+                       UErrorCode &ec);
+
 
     void closeOverCaseInsensitive(bool simple);
     void closeOverAddCaseMappings();
@@ -1751,9 +1796,6 @@ private:
      */
     static UBool resemblesPropertyPattern(const UnicodeString& pattern,
                                           int32_t pos);
-
-    static UBool resemblesPropertyPattern(RuleCharacterIterator& chars,
-                                          int32_t iterOpts);
 
     /**
      * Parse the given property pattern at the given parse position
