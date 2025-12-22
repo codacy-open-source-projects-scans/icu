@@ -314,9 +314,8 @@ class UnicodeSet::Lexer {
             BRACKETED_ELEMENT,
             STRING_LITERAL,
             PROPERTY_QUERY,
-            // ICU extension: A literal-element, escaped-element, or set-operator or (but not
-            // bracketed-element) which is mapped to a set.  This may also be an unescaped '{', in which
-            // case bracketed-element and string-literal are inaccessible.
+            // ICU extension: A literal-element or escaped-element (but not
+            // bracketed-element) which is mapped to a set.
             STAND_IN,
             END_OF_TEXT,
         };
@@ -352,14 +351,6 @@ class UnicodeSet::Lexer {
 
     bool acceptSetOperator(char16_t op) {
         if (lookahead().isSetOperator(op)) {
-            advance();
-            return true;
-        }
-        return false;
-    }
-
-    bool acceptStandInWithSymbol(char16_t op) {
-        if (lookahead().standIn() != nullptr && lookahead().sourceText_ == std::u16string_view(&op, 1)) {
             advance();
             return true;
         }
@@ -441,7 +432,6 @@ class UnicodeSet::Lexer {
         UBool unusedEscaped;
         const UChar32 first =
             chars_.next(charsOptions_ & ~RuleCharacterIterator::PARSE_ESCAPES, unusedEscaped, errorCode);
-        // '[', named-element, and property-query cannot be disabled by stand-in.
         if (first == u'[' || first == u'\\') {
             const RuleCharacterIterator::Pos afterFirst = getPos();
             // This could be a property-query or named-element.
@@ -467,14 +457,13 @@ class UnicodeSet::Lexer {
             // Not a property-query.
             chars_.setPos(afterFirst);
         }
-        if (first == u'[') {
+        switch (first) {
+        case u'[':
             return LexicalElement(
                 LexicalElement::SET_OPERATOR, UnicodeString(u'['), getPos(), errorCode,
                 /*standIn=*/nullptr,
                 std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
-        }
-
-        if (first == u'\\') {
+        case u'\\': {
             // Now try to parse the escape.
             chars_.setPos(before);
             UChar32 codePoint = chars_.next(charsOptions_, unusedEscaped, errorCode);
@@ -487,17 +476,6 @@ class UnicodeSet::Lexer {
                 standIn == nullptr ? UnicodeString(codePoint) : UnicodeString(), getPos(), errorCode,
                 standIn, std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
         }
-        if (symbols_ != nullptr) {
-            const UnicodeSet *const standIn =
-                dynamic_cast<const UnicodeSet *>(symbols_->lookupMatcher(first));
-            if (standIn != nullptr) {
-                return LexicalElement(
-                    LexicalElement::STAND_IN, {}, getPos(), errorCode, standIn,
-                    std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
-            }
-        }
-
-        switch (first) {
         case u'&':
         case u'-':
         case u']':
@@ -532,6 +510,15 @@ class UnicodeSet::Lexer {
                 std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
         }
         default:
+            if (symbols_ != nullptr) {
+                const UnicodeSet *const standIn =
+                    dynamic_cast<const UnicodeSet *>(symbols_->lookupMatcher(first));
+                if (standIn != nullptr) {
+                    return LexicalElement(
+                        LexicalElement::STAND_IN, {}, getPos(), errorCode, standIn,
+                        std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
+                }
+            }
             return LexicalElement(
                 LexicalElement::LITERAL_ELEMENT, UnicodeString(first), getPos(), errorCode, nullptr,
                 std::u16string_view(pattern_).substr(start, parsePosition_.getIndex() - start));
@@ -750,13 +737,9 @@ void UnicodeSet::parseUnicodeSet(Lexer &lexer,
         // Extension:
         //              | stand-in
         // Where a stand-in may be a character or an escape.
-        // Strings that would match stand-in effectively get removed from
-        // all other terminals of the grammar, except [.
-        // When mapped by the symbol table, whether ^ and - are treated as set operators depends on where
-        // in the grammar we are, hence `acceptStandInWithSymbol`.
         if (lexer.acceptSetOperator(u'[')) {
             prettyPrintedPattern.append(u'[');
-            if (lexer.acceptSetOperator(u'^') || lexer.acceptStandInWithSymbol(u'^')) {
+            if (lexer.acceptSetOperator(u'^')) {
                 prettyPrintedPattern.append(u'^');
                 isComplement = true;
             }
@@ -812,7 +795,7 @@ void UnicodeSet::parseUnion(Lexer &lexer,
     //         | UnescapedHyphenMinus Terms UnescapedHyphenMinus
     // Terms ::= ""
     //         | Terms Term
-    if (lexer.acceptSetOperator(u'-') || lexer.acceptStandInWithSymbol(u'-')) {
+    if (lexer.acceptSetOperator(u'-')) {
         add(u'-');
         // When we otherwise preserve the syntax, we escape an initial UnescapedHyphenMinus, but not a
         // final one, for consistency with older ICU behaviour.
