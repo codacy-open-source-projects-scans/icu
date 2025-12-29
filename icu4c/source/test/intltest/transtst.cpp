@@ -983,9 +983,9 @@ void TransliteratorTest::TestArbitraryVariableValues() {
     UnicodeString DATA[] = {
         "$abe = ab;"
         "$pat = x[yY]z;"
-        "$ll  = 'a-z';"
+        "$ll  = [a-z];"
         "$llZ = [$ll];"
-        "$llY = [$ll$pat];"
+        "$llY = [$ll Y];"
         "$emp = ;"
 
         "$abe > ABE;"

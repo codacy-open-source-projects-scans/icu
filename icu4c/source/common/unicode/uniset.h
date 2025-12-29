@@ -1840,10 +1840,6 @@ private:
                                      ParsePosition& ppos,
                                      UErrorCode &ec);
 
-    void applyPropertyPattern(RuleCharacterIterator& chars,
-                              UnicodeString& rebuiltPat,
-                              UErrorCode& ec);
-
     /**
      * A filter that returns true if the given code point should be
      * included in the UnicodeSet being constructed.

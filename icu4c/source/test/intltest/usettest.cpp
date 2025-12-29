@@ -1761,19 +1761,10 @@ void UnicodeSetTest::TestSymbolTable() {
     // is terminated by null:
     // var, value, var, value,..., input pat., exp. output pat., null
     const char *DATA[] = {
-        "us", "a-z", "[0-1$us]", "[0-1a-z]", nullptr,
         "us", "[a-z]", "[0-1$us]", "[0-1[a-z]]", nullptr,
-        "us", "\\[a\\-z\\]", "[0-1$us]", "[-01\\[\\]az]", nullptr,
-        // Things that probably should not work, but currently do:
-        "open", "[", "$open a-z]", "[a-z]", nullptr,
-        "open", "[", "close", "]", "hyphenMinus", "-",
-            "[ $open a $hyphenMinus z] $hyphenMinus [ c-z $close $hyphenMinus ]",
-            "[[a-z]-[c-z]-]", nullptr,
-        "string", "{", "end", "}", "[ $string Zeichenkette $end ]", "[{Zeichenkette}]", nullptr,
+        // Variables do not expand inside string literals.
+        "us", "[a-z]", "[$us{$us}]", R"([a-z{\$us}])", nullptr,
         "privateUse", "[[:Co:]]", "$privateUse", "[[:Co:]]", nullptr,
-        "smiling", ":-]", "laughing", ":-D",
-            "[ {$smiling} $laughing $smiling",
-            R"([\-\:-D{\:\-\]}])", nullptr,
         nullptr
     };
 
@@ -1819,7 +1810,6 @@ void UnicodeSetTest::TestSymbolTable() {
             errln("FAIL: couldn't construct expected UnicodeSet");
             continue;
         }
-        
         UnicodeString a, b;
         if (us != us2) {
             errln(UnicodeString("Failed, got ") + us.toPattern(a, true) +
@@ -1838,24 +1828,90 @@ void UnicodeSetTest::TestSymbolTable() {
         UErrorCode expectedErrorCode;
         std::u16string_view expectedPattern;
     };
+    const std::u16string open = u"[a";
+    const std::u16string close = u"]";
+    std::u16string deep = u"[a]";
+    std::u16string deepReference = u"$deep";
+    for (int i = 0; i < 100; ++i) {
+      deep = open + deep + close;
+      deepReference = open + deepReference + close;
+    }
+    const std::u16string deeper = open + deep + close;
+    const std::u16string deeperReference = open + deepReference + close;
+    const std::u16string unfathomableDepths =
+        deepReference.substr(0, 200) + deep + deepReference.substr(205);
     for (const auto &[variables, expression, expectedErrorCode, expectedPattern] : std::vector<TestCase>{
-            // You should not do this, but it works.
+            // a-z is neither a single element nor a set (that would be [a-z]).
+            {{{u"us", u"a-z"}}, u"[0-1$us]", U_MALFORMED_VARIABLE_DEFINITION, u"[01]"},
+            // Same with \[a\-z\].
+            {{{u"us", uR"(\[a\-z\])"}}, u"[0-1$us]", U_MALFORMED_VARIABLE_DEFINITION, u"[01]"},
+            // Same with :-D.
+            {{{u"smiling", u":-]"}, {u"laughing", u":-D"}},
+             u"[ {$smiling} $laughing $smiling",
+             U_MALFORMED_VARIABLE_DEFINITION,
+             uR"([{\$smiling}])"},
+            // Variables cannot be partial UnicodeSet expressions.
             {{{u"privateUseOrUnassigned", u"[[:Co:][:Cn:]"}, {u"close", u"]"}},
-            u"$privateUseOrUnassigned$close",
-            U_ZERO_ERROR,
-            u"[[:Co:][:Cn:]]"},
+             u"$privateUseOrUnassigned$close",
+             U_MALFORMED_SET,
+             u"[]"},
+            // Variables cannot be set-operators.
+            {{{u"open", u"["}}, u"$open a-z]", U_MALFORMED_SET, u"[]"},
+            {{{u"open", u"["}, {u"close", u"]"}, {u"hyphenMinus", u"-"}},
+             u"[ $open a $hyphenMinus z] $hyphenMinus [ c-z $close $hyphenMinus ]",
+             U_MALFORMED_SET,
+             u"[]"},
+            // Variables cannot be unpaired string delimiters.
+            {{{u"string", u"{"}, {u"end", u"}"}},
+             u"[$string Zeichenkette $end]",
+             U_MALFORMED_SET,
+             u"[]"},
             // This works and it is fine.
             {{{u"privateUse", u"[[:Co:]]"}}, u"$privateUse", U_ZERO_ERROR, u"[[:Co:]]"},
-            // This should work! But it does not. Note the doubled brackets on the one that works above.
-            // We are not yet inside the variable when we call lookahead(), so we try to parse
-            // $privateUse rather than [:Co:].
-            {{{u"privateUse", u"[:Co:]"}}, u"[$privateUse]", U_ILLEGAL_ARGUMENT_ERROR, u"[]"},
-            // This should not work, and it does not (we try to parse [$sad$surprised] as a
-            // property-query).
+            // This also works now.
+            {{{u"privateUse", u"[:Co:]"}}, u"[$privateUse]", U_ZERO_ERROR, u"[[:Co:]]"},
+            // Variables cannot piece together a property-query.
             {{{u"sad", u":C"}, {u"surprised", u"o:"}},
-            u"[$sad$surprised]",
-            U_ILLEGAL_ARGUMENT_ERROR,
-            u"[]"},
+             u"[$sad$surprised]",
+             U_MALFORMED_VARIABLE_DEFINITION,
+             u"[]"},
+            // The empty string is neither a set nor an element.
+            {{{u"leer", u""}},
+             u"[$leer]",
+             U_MALFORMED_VARIABLE_DEFINITION,
+             u"[]"},
+            // The empty string literal is an element.
+            {{{u"leer", u"{}"}},
+             u"[$leer]",
+             U_ZERO_ERROR,
+             u"[{}]"},
+            // Check that we don’t recursively expand variables.
+            // In ICU79 and earlier, this would have been U_ZERO_ERROR with [[\$y][\$x]]; but \$y is
+            // a sequence of elements, so it is not a valid variable value.
+            {{{u"x", u"$y"}, {u"y", u"$x"}},
+             u"[[$x][$y]]",
+             U_MALFORMED_VARIABLE_DEFINITION,
+             u"[]"},
+            // Since variable expansion spawns a new parser in the lexer, which is by design unaware
+            // of the outer parser, a variable can be used to double the maximum depth of a
+            // UnicodeSet.  Check that this doesn’t explode the stack, and check that both the
+            // variable and the outer expression can produce an error if they are too deep.
+            {{{u"deep", deep}},
+             deepReference,
+             U_ZERO_ERROR,
+             unfathomableDepths},
+            {{{u"deep", deeper}},
+             deepReference,
+             U_MALFORMED_VARIABLE_DEFINITION,
+             u"[a]"},
+            {{{u"deep", deep}},
+             deeperReference,
+             U_MALFORMED_SET,
+             u"[a]"},
+            {{{u"deep", deeper}},
+             deeperReference,
+             U_MALFORMED_VARIABLE_DEFINITION,
+             u"[a]"},
         }) {
         UErrorCode errorCode = U_ZERO_ERROR;
         TokenSymbolTable symbols(errorCode);
@@ -1977,16 +2033,17 @@ void UnicodeSetTest::TestLookupSymbolTable() {
             U_ZERO_ERROR,
             u"[[a-z]-[bc]]",
             u"[ad-z]",
-            {u"zero", u"zero", u'0', u"one", u'1'},
+            {u"zero", u'0', u"one", u'1'},
             {{u"zero", u"0"}, {u"one", u"1"}}},
-            // If the variable expands to multiple symbols, only the first one is sequenced right after
-            // the variable lookup.
+            // A variable that expands to multiple symbols is ill-formed; we
+            // don’t even need to resolve the second symbol, its presence is
+            // enough to fail.
             {u"[$ten]",
-            U_ZERO_ERROR,
-            u"[[bc][a-z]]",
-            u"[a-z]",
-            {u"ten", u"ten", u'1', u'0'},
-            {{u"ten", u"10"}}},
+             U_MALFORMED_VARIABLE_DEFINITION,
+             u"[]",
+             u"[]",
+             {u"ten", u'1'},
+             {{u"ten", u"10"}}},
             // Substitution of lookupMatcher symbols takes place after unescaping.
             {uR"([!-\u0030])", U_MALFORMED_SET, u"[]", u"[]", {u'!', u'0'}},
             // It does not take place in string literals.
@@ -4636,6 +4693,7 @@ void UnicodeSetTest::TestToPatternOutput() {
             {uR"(\p{P})", uR"(\p{P})"},
             {uR"(\p{gc=P})", uR"(\p{gc=P})"},
             {uR"([: general category = punctuation :])", uR"([: general category = punctuation :])"},
+            // TODO(egg): PDUTS #61 disallows the space before ^.
             {uR"([: ^general category = punctuation :])", uR"([: ^general category = punctuation :])"},
             {uR"(\P{ gc = punctuation })", uR"(\P{ gc = punctuation })"},
             {uR"(\N{ latin small letter a })", uR"(\N{ latin small letter a })"},
