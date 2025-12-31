@@ -19,11 +19,11 @@
 #include "unicode/uobject.h"
 
 /**
- * \file 
+ * \file
  * \brief C++ API: An interface that defines both lookup protocol and parsing of
  * symbolic names.
  */
- 
+
 U_NAMESPACE_BEGIN
 
 class ParsePosition;
@@ -81,6 +81,16 @@ public:
      * @stable ICU 2.8
      */
     virtual const UnicodeString* lookup(const UnicodeString& s) const = 0;
+
+    /**
+     * Returns a pointer to a pre-parsed set associated with the variable with
+     * the given name, or null if there is no such set (as is the case for an
+     * undefined or string-valued variable).
+     * @internal
+     */
+    virtual const UnicodeSet* lookupSet(const UnicodeString& /*name*/) const {
+        return nullptr;
+    }
 
     /**
      * Lookup the UnicodeMatcher associated with the given character, and

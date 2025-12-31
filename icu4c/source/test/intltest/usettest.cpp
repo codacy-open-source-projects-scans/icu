@@ -122,7 +122,7 @@ UnicodeSetTest::runIndexedTest(int32_t index, UBool exec,
 
 static const char NOT[] = "%%%%";
 
-/** 
+/**
  * UVector was improperly copying contents
  * This code will crash this is still true
  */
@@ -144,7 +144,7 @@ void UnicodeSetTest::TestToPattern() {
     // whitespace.
     {
         static const char* OTHER_TOPATTERN_TESTS[] = {
-            "[[:latin:]&[:greek:]]", 
+            "[[:latin:]&[:greek:]]",
             "[[:latin:]-[:greek:]]",
             "[:nonspacing mark:]",
             nullptr
@@ -159,7 +159,7 @@ void UnicodeSetTest::TestToPattern() {
             }
             checkPat(OTHER_TOPATTERN_TESTS[j], s);
         }
-    
+
         for (UChar32 i = 0; i <= 0x10FFFF; ++i) {
             if ((i <= 0xFF && !u_isalpha(i)) || u_isspace(i)) {
 
@@ -221,13 +221,13 @@ void UnicodeSetTest::TestToPattern() {
         if (U_FAILURE(ec)) errln("FAIL: pattern parse error");
         delete s;
     }
- 
+
     // JB#3400: For 2 character ranges prefer [ab] to [a-b]
     UnicodeSet s;
     s.add(u'a', u'b');
     expectToPattern(s, "[ab]", nullptr);
 }
-    
+
 UBool UnicodeSetTest::toPatternAux(UChar32 start, UChar32 end) {
 
     // use Integer.toString because Utility.hex doesn't handle ints
@@ -237,13 +237,13 @@ UBool UnicodeSetTest::toPatternAux(UChar32 start, UChar32 end) {
     //if (start != end) source += "..0x" + Integer.toString(end,16).toUpperCase();
     UnicodeString source;
     source = source + static_cast<uint32_t>(start);
-    if (start != end) 
+    if (start != end)
         source = source + ".." + static_cast<uint32_t>(end);
     UnicodeSet testSet;
     testSet.add(start, end);
     return checkPat(source, testSet);
 }
-    
+
 UBool UnicodeSetTest::checkPat(const UnicodeString& source,
                                const UnicodeSet& testSet) {
     // What we want to make sure of is that a pattern generated
@@ -252,19 +252,19 @@ UBool UnicodeSetTest::checkPat(const UnicodeString& source,
     UnicodeString pat0;
 
     testSet.toPattern(pat0, true);
-    
+
     if (!checkPat(source + " (escaped)", testSet, pat0)) return false;
-    
+
     //String pat1 = unescapeLeniently(pat0);
     //if (!checkPat(source + " (in code)", testSet, pat1)) return false;
-    
-    UnicodeString pat2; 
+
+    UnicodeString pat2;
     testSet.toPattern(pat2, false);
     if (!checkPat(source, testSet, pat2)) return false;
-    
+
     //String pat3 = unescapeLeniently(pat2);
     // if (!checkPat(source + " (in code)", testSet, pat3)) return false;
-    
+
     //logln(source + " => " + pat0 + ", " + pat1 + ", " + pat2 + ", " + pat3);
     logln(UnicodeString(source) + " => " + pat0 + ", " + pat2);
     return true;
@@ -325,7 +325,7 @@ UnicodeSetTest::TestCategories() {
             if (++failures == 10) break;
         }
     }
-    
+
     set.applyPattern("[:Lu:]", status);
     if (U_FAILURE(status)) { errln("FAIL"); return; }
     for (i=0; i<0x200; ++i) {
@@ -367,7 +367,7 @@ UnicodeSetTest::TestCloneEqualHash() {
 
     logln("Testing copy construction");
     UnicodeSet *set1copy=new UnicodeSet(*set1);
-    if(*set1 != *set1copy || *set1 == *set2 || 
+    if(*set1 != *set1copy || *set1 == *set2 ||
         getPairs(*set1) != getPairs(*set1copy) ||
         set1->hashCode() != set1copy->hashCode()){
         errln("FAIL : Error in copy construction");
@@ -377,7 +377,7 @@ UnicodeSetTest::TestCloneEqualHash() {
     logln("Testing =operator");
     UnicodeSet set1equal=*set1;
     UnicodeSet set2equal=*set2;
-    if(set1equal != *set1 || set1equal != *set1copy || set2equal != *set2 || 
+    if(set1equal != *set1 || set1equal != *set1copy || set2equal != *set2 ||
         set2equal == *set1 || set2equal == *set1copy || set2equal == set1equal){
         errln("FAIL: Error in =operator");
     }
@@ -385,8 +385,8 @@ UnicodeSetTest::TestCloneEqualHash() {
     logln("Testing clone()");
     UnicodeSet *set1clone=set1->clone();
     UnicodeSet *set2clone=set2->clone();
-    if(*set1clone != *set1 || *set1clone != *set1copy || *set1clone != set1equal || 
-        *set2clone != *set2 || *set2clone == *set1copy || *set2clone != set2equal || 
+    if(*set1clone != *set1 || *set1clone != *set1copy || *set1clone != set1equal ||
+        *set2clone != *set2 || *set2clone == *set1copy || *set2clone != set2equal ||
         *set2clone == *set1 || *set2clone == set1equal || *set2clone == *set1clone){
         errln("FAIL: Error in clone");
     }
@@ -660,7 +660,7 @@ void UnicodeSetTest::TestAPI() {
     exp.applyPattern("[{ab}]", status);
     if (U_FAILURE(status)) { errln("FAIL"); return; }
     if (set != exp) { errln("FAIL: complement(\"ab\")"); return; }
-    
+
     UnicodeSetIterator iset(set);
     if (!iset.next() || !iset.isString()) {
         errln("FAIL: UnicodeSetIterator::next/isString");
@@ -798,7 +798,7 @@ void UnicodeSetTest::TestIteration() {
     UErrorCode ec = U_ZERO_ERROR;
     int i = 0;
     int outerLoop;
-    
+
     // 6 code points, 3 ranges, 2 strings, 8 total elements
     //   Iteration will access them in sorted order -  a, b, c, y, z, U0001abcd, "str1", "str2"
     UnicodeSet set(u"[zabyc\\U0001abcd{str1}{str2}]", ec);
@@ -871,24 +871,24 @@ void UnicodeSetTest::TestIteration() {
         it.reset();  // prepare to run the iteration again.
     }
 }
-                
+
 
 
 
 void UnicodeSetTest::TestStrings() {
     UErrorCode ec = U_ZERO_ERROR;
-    
+
     UnicodeSet* testList[] = {
         UnicodeSet::createFromAll("abc"),
         new UnicodeSet("[a-c]", ec),
-        
+
         &(UnicodeSet::createFrom("ch")->add('a','z').add("ll")),
         new UnicodeSet("[{ll}{ch}a-z]", ec),
-    
+
         UnicodeSet::createFrom("ab}c"),
         new UnicodeSet("[{ab\\}c}]", ec),
 
-        &((new UnicodeSet('a','z'))->add('A', 'Z').retain('M','m').complement('X')), 
+        &((new UnicodeSet('a','z'))->add('A', 'Z').retain('M','m').complement('X')),
         new UnicodeSet("[[a-zA-Z]&[M-m]-[X]]", ec),
 
         nullptr
@@ -923,7 +923,7 @@ void UnicodeSetTest::TestScriptSet() {
     expectContainment(u"[:Latin:]", "aA", CharsToUnicodeString("\\u0391\\u03B1"));
 
     expectContainment(u"[:Greek:]", CharsToUnicodeString("\\u0391\\u03B1"), "aA");
-    
+
     /* Jitterbug 1423 */
     expectContainment(u"[[:Common:][:Inherited:]]", CharsToUnicodeString("\\U00003099\\U0001D169\\u0000"), "aA");
 
@@ -984,7 +984,7 @@ void UnicodeSetTest::TestPropertySet() {
         "[:Ascii:]",
         "abc\\u0000\\u007F",
         "\\u0080\\u4E00",
-        
+
         "[\\N{ latin small letter  a  }[:name= latin small letter z:]]",
         "az",
         "qrs",
@@ -1002,7 +1002,7 @@ void UnicodeSetTest::TestPropertySet() {
         "[:Age=1.1:]",
         "\\u03D6", // 1.1
         "\\u03D8\\u03D9", // 3.2
-        
+
         "[:Age=3.1:]",
         "\\u1800\\u3400\\U0002f800",
         "\\u0220\\u034f\\u30ff\\u33ff\\ufe73\\U00010000\\U00050000",
@@ -1049,7 +1049,7 @@ void UnicodeSetTest::TestPropertySet() {
         "[a-b-]", // trailing '-' is literal
         "ab-",
         "c=",
-        
+
         "[[a-q]&[p-z]-]", // trailing '-' is literal
         "pq-",
         "or=",
@@ -1061,15 +1061,15 @@ void UnicodeSetTest::TestPropertySet() {
         "[\\uDC00cd]", // JB#2906: isolated trail at start
         "cd\\uDC00",
         "ab\\uD800\\U00010000",
-        
+
         "[ab\\uD800]", // JB#2906: isolated trail at start
         "ab\\uD800",
         "cd\\uDC00\\U00010000",
-        
+
         "[ab\\uD800cd]", // JB#2906: isolated lead in middle
         "abcd\\uD800",
         "ef\\uDC00\\U00010000",
-        
+
         "[ab\\uDC00cd]", // JB#2906: isolated trail in middle
         "abcd\\uDC00",
         "ef\\uD800\\U00010000",
@@ -1090,7 +1090,7 @@ void UnicodeSetTest::TestPropertySet() {
         "[[:^lccc=0:]-[:^tccc=0:]]", // Stuff that starts with an accent but ends with a base (none right now)
         "",
         "abcd\\u0300\\u0301\\u00c0\\u00c5",
-        
+
         "[[:ccc=0:]-[:lccc=0:]-[:tccc=0:]]", // Weirdos. Complete canonical class is zero, but both lead and trail are not
         "\\u0F73\\u0F75\\u0F81",
         "abcd\\u0300\\u0301\\u00c0\\u00c5",
@@ -1114,7 +1114,7 @@ void UnicodeSetTest::TestPropertySet() {
 
     static const int32_t DATA_LEN = UPRV_LENGTHOF(DATA);
 
-    for (int32_t i=0; i<DATA_LEN; i+=3) {  
+    for (int32_t i=0; i<DATA_LEN; i+=3) {
         expectContainment(UnicodeString(DATA[i], -1, US_INV), CharsToUnicodeString(DATA[i+1]),
                           CharsToUnicodeString(DATA[i+2]));
     }
@@ -1606,12 +1606,12 @@ void UnicodeSetTest::TestInvalidCodePoint() {
         UnicodeSet set(start, end);
         expectRange(UnicodeString("ct(") + start + "," + end + ")",
                     set, xstart, xend);
-        
+
         set.clear();
         set.set(start, end);
         expectRange(UnicodeString("set(") + start + "," + end + ")",
                     set, xstart, xend);
-        
+
         UBool b = set.contains(start);
         b = set.contains(start, end);
         b = set.containsNone(start, end);
@@ -1619,7 +1619,7 @@ void UnicodeSetTest::TestInvalidCodePoint() {
         (void)b;   // Suppress set but not used warning.
 
         /*int32_t index = set.indexOf(start);*/
-        
+
         set.clear();
         set.add(start);
         set.add(start, end);
@@ -1886,8 +1886,8 @@ void UnicodeSetTest::TestSymbolTable() {
              U_ZERO_ERROR,
              u"[{}]"},
             // Check that we don’t recursively expand variables.
-            // In ICU79 and earlier, this would have been U_ZERO_ERROR with [[\$y][\$x]]; but \$y is
-            // a sequence of elements, so it is not a valid variable value.
+            // In ICU 78 and earlier, this would have been U_ZERO_ERROR with [[\$y][\$x]]; but \$y
+            // is a sequence of elements, so it is not a valid variable value.
             {{{u"x", u"$y"}, {u"y", u"$x"}},
              u"[[$x][$y]]",
              U_MALFORMED_VARIABLE_DEFINITION,
@@ -1947,30 +1947,48 @@ void UnicodeSetTest::TestLookupSymbolTable() {
     struct TestCase {
         struct Variable {
             std::u16string_view name;
-            std::u16string_view value;
+            std::variant<UnicodeString, UnicodeSet> value;
         };
         std::u16string_view expression;
         UErrorCode expectedErrorCode;
         std::u16string_view expectedPattern;
         std::u16string_view expectedRegeneratedPattern;
-        // Hyrum’s law at work: Some users (RBBI) depend on the sequencing of `lookup` and
-        // `lookupMatcher` calls, so we test that.
-        std::vector<std::variant<UnicodeString, UChar32>> expectedLookups;
-        // Variables for `lookup`.
+        std::vector<UnicodeString> expectedLookups;
+        // Variables for `lookup` and `lookupSet`.
         std::vector<Variable> variables;
     };
     class TestSymbolTable : public SymbolTable {
       public:
+        TestSymbolTable(UnicodeSetTest &test) : test_(test) {}
+
         const UnicodeString *lookup(const UnicodeString &name) const override {
             auto it = variables_.find(name);
-            lookupTrace_.push_back(name);
-            return it == variables_.end() ? nullptr : &it->second;
+            lookupTrace_.push_back(u"lookup(" + name + u")");
+            if (it == variables_.end()) {
+                return nullptr;
+            }
+            if (std::holds_alternative<UnicodeString>(it->second)) {
+                return &std::get<UnicodeString>(it->second);
+            } else {
+                test_.errln(
+                    u"Unexpected call to lookup() instead of lookupSet() on set-valued variable " +
+                    name);
+                return nullptr;
+            }
         }
 
-        const UnicodeFunctor *lookupMatcher(UChar32 c) const override {
-            lookupTrace_.push_back(c);
-            return symbols_.find(c) != symbols_.end() ? &symbols_.at(c)
-                                                                    : nullptr;
+        const UnicodeSet *lookupSet(const UnicodeString &name) const override {
+            auto it = variables_.find(name);
+            lookupTrace_.push_back(u"lookupSet(" + name + u")");
+            if (it != variables_.end() && std::holds_alternative<UnicodeSet>(it->second)) {
+                return &std::get<UnicodeSet>(it->second);
+            }
+            return nullptr;
+        }
+
+        const UnicodeFunctor *lookupMatcher(UChar32 /*c*/) const override {
+            test_.errln(u"Unexpected call to lookupMatcher() while parsing UnicodeSet");
+            return nullptr;
         }
 
         virtual UnicodeString parseReference(const UnicodeString &text, ParsePosition &pos,
@@ -1988,17 +2006,14 @@ void UnicodeSetTest::TestLookupSymbolTable() {
                 return limitedText;
         }
 
-        void add(UChar32 c, UnicodeSet set) {
-            symbols_[c] = set;
-        }
-
         void setVariables(const std::vector<TestCase::Variable>& variables) {
+            variables_.clear();
             for (const auto &[name, value] : variables) {
                 variables_[name] = value;
             }
         }
 
-        const std::vector<std::variant<UnicodeString, UChar32>>& getLookupTrace() const {
+        const std::vector<UnicodeString>& getLookupTrace() const {
             return lookupTrace_;
         }
 
@@ -2008,53 +2023,46 @@ void UnicodeSetTest::TestLookupSymbolTable() {
 
       private:
         std::unordered_map<UChar32, UnicodeSet> symbols_;
-        std::map<UnicodeString, UnicodeString> variables_;
-        mutable std::vector<std::variant<UnicodeString, UChar32>> lookupTrace_;
+        std::map<UnicodeString, std::variant<UnicodeString, UnicodeSet>> variables_;
+        mutable std::vector<UnicodeString> lookupTrace_;
+        UnicodeSetTest &test_;
     };
-    TestSymbolTable symbols;
-    symbols.add(u'0', UnicodeSet(u"[ a-z ]", errorCode));
-    symbols.add(u'1', UnicodeSet(u"[ b-c ]", errorCode));
-    symbols.add(u'2', UnicodeSet(u"[: Co :]", errorCode));
+    TestSymbolTable symbols(*this);
     for (const auto &[expression, expectedErrorCode, expectedPattern, expectedRegeneratedPattern,
                       expectedLookups, variables] : std::vector<TestCase>{
-            {u"0", U_ZERO_ERROR, u"[a-z]", u"[a-z]", {u'0'}},
-            {u"[0-1]", U_ZERO_ERROR, u"[[a-z]-[bc]]", u"[ad-z]", {u'0', u'1'}},
-            {u"[!-0]", U_MALFORMED_SET, u"[]", u"[]", {u'!', u'0'}},
-            // A call to lookupMatcher with the first character of the content of a variable happens
-            // immediately after a corresponding call to lookup, although we may lookup the variable
-            // several times before we call lookupMatcher.
-            {u"[0-$one]",
-            U_ZERO_ERROR,
-            u"[[a-z]-[bc]]",
-            u"[ad-z]",
-            {u'0', u"one", u'1'},
-            {{u"zero", u"0"}, {u"one", u"1"}}},
+            // Variables that are found by lookupSet are not looked up with the old lookup.
+            {u"[0-$one]", U_MALFORMED_SET, u"[]", u"[]",
+             {u"lookupSet(one)"},
+             {{u"one", UnicodeSet(u"[ b-c ]", errorCode)}}},
             {u"[$zero-$one]",
-            U_ZERO_ERROR,
-            u"[[a-z]-[bc]]",
-            u"[ad-z]",
-            {u"zero", u'0', u"one", u'1'},
-            {{u"zero", u"0"}, {u"one", u"1"}}},
-            // A variable that expands to multiple symbols is ill-formed; we
-            // don’t even need to resolve the second symbol, its presence is
-            // enough to fail.
-            {u"[$ten]",
-             U_MALFORMED_VARIABLE_DEFINITION,
+             U_ZERO_ERROR,
+             u"[[a-z]-[bc]]",
+             u"[ad-z]",
+             {u"lookupSet(zero)", u"lookupSet(one)"},
+             {{u"zero", UnicodeSet(u"[ a-z ]", errorCode)},
+              {u"one", UnicodeSet(u"[ b-c ]", errorCode)}}},
+            {uR"([ $two & $one ])",
+             U_ZERO_ERROR,
+             u"[[: Co :]&[bc]]",
+             u"[]",
+             {u"lookupSet(two)", u"lookupSet(one)"},
+             {{u"two", UnicodeSet(u"[: Co :]", errorCode)},
+              {u"one", UnicodeSet(u"[ b-c ]", errorCode)}}},
+            // A variable that is not found by lookupSet is then looked up with the old lookup.
+            {uR"([ $two$one ])",
+             U_ZERO_ERROR,
+             u"[[: Co :][bc]]",
+             u"[bc\uE000-\uF8FF\U000F0000-\U000FFFFD\U00100000-\U0010FFFD]",
+             {u"lookupSet(two)", u"lookup(two)", u"lookupSet(one)"},
+             {{u"two", UnicodeString(u"[: Co :]")},
+              {u"one", UnicodeSet(u"[ b-c ]", errorCode)}}},
+            // If neither lookupSet nor lookup return something, we get an error.
+            {uR"([ $two$one ])",
+             U_UNDEFINED_VARIABLE,
              u"[]",
              u"[]",
-             {u"ten", u'1'},
-             {{u"ten", u"10"}}},
-            // Substitution of lookupMatcher symbols takes place after unescaping.
-            {uR"([!-\u0030])", U_MALFORMED_SET, u"[]", u"[]", {u'!', u'0'}},
-            // It does not take place in string literals.
-            {uR"([!-/{0}])", U_ZERO_ERROR, u"[!-0]", u"[!-0]", {u'!', u'/'}},
-            {uR"([ 2 & 1 ])", U_ZERO_ERROR, u"[[: Co :]&[bc]]", u"[]", {u'2', u'1'}},
-            {uR"([ 21 ])",
-            U_ZERO_ERROR,
-            u"[[: Co :][bc]]",
-            u"[bc\uE000-\uF8FF\U000F0000-\U000FFFFD\U00100000-\U0010FFFD]",
-            {u'2', u'1'}},
-            {u"[ a-b 1 ]", U_ZERO_ERROR, u"[a-b[bc]]", u"[a-c]", {u'a', u'b', u'1'}},
+             {u"lookupSet(two)", u"lookup(two)"},
+             {{u"one", UnicodeSet(u"[ b-c ]", errorCode)}}},
         }) {
         symbols.setVariables(variables);
         symbols.clearLookupTrace();
@@ -2078,67 +2086,12 @@ void UnicodeSetTest::TestLookupSymbolTable() {
             UnicodeString expected;
             UnicodeString actual;
             for (const auto &l : expectedLookups) {
-                expected += std::holds_alternative<UChar32>(l)
-                                ? (u"u'" + UnicodeString(std::get<UChar32>(l)) + u"', ")
-                                : u"u\"" + std::get<UnicodeString>(l) + u"\", ";
+                expected += u"u\"" + l + u"\", ";
             }
             for (const auto &l : symbols.getLookupTrace()) {
-                actual += std::holds_alternative<UChar32>(l)
-                              ? (u"u'" + UnicodeString(std::get<UChar32>(l)) + u"', ")
-                              : u"u\"" + std::get<UnicodeString>(l) + u"\", ";
+                actual += u"u\"" + l + u"\", ";
             }
             errln(u"Unexpected sequence of lookups:\nExpected : " + expected + "\nActual   : " + actual);
-        }
-    }
-    // Defining syntax characters as symbols has no effect on syntax.
-    symbols.add(u'-', UnicodeSet(u"[{hyphenMinus}]", errorCode));
-    symbols.add(u'&', UnicodeSet(u"[{ampersand}]", errorCode));
-    // This one is never used, except if escaped.
-    symbols.add(u'[', UnicodeSet(u"[{leftSquareBracket}]", errorCode));
-    symbols.add(u']', UnicodeSet(u"[{rightSquareBracket}]", errorCode));
-    symbols.add(u'^', UnicodeSet(u"[{circumflexAccent}]", errorCode));
-    symbols.add(u'{', UnicodeSet(u"[{leftCurlyBracket}]", errorCode));
-    symbols.add(u'}', UnicodeSet(u"[{rightCurlyBracket}]", errorCode));
-    symbols.add(u'$', UnicodeSet(u"[{dollarSign}]", errorCode));
-    symbols.add(u':', UnicodeSet(u"[{colon}]", errorCode));
-    symbols.add(u'\\', UnicodeSet(u"[{reverseSolidus}]", errorCode));
-    symbols.add(u'p', UnicodeSet(u"[{latinSmallLetterP}]", errorCode));
-    for (const auto &[expression, expectedErrorCode, expectedPattern, expectedRegeneratedPattern,
-                      expectedLookups, variables] : std::vector<TestCase>{
-            {u"-", U_MALFORMED_SET, u"[]", u"[]"},
-            {u"0", U_ZERO_ERROR, u"[a-z]", u"[a-z]"},
-            {u"[0-1]", U_ZERO_ERROR, u"[[a-z]-[bc]]", u"[ad-z]"},
-            {u"[!-0]", U_MALFORMED_SET, u"[]", u"[]"},
-            {u"[-1]", U_ZERO_ERROR, uR"([\-[bc]])", uR"([\-bc])"},
-            {u"[1-]", U_ZERO_ERROR, u"[[bc]-]", uR"([\-bc])"},
-            {uR"([!-/{0}])", U_ZERO_ERROR, u"[!-0]", u"[!-0]"},
-            {uR"([ 2 & 1 ])", U_ZERO_ERROR, u"[[: Co :]&[bc]]", u"[]"},
-            {uR"([^ \u0000 ])", U_ZERO_ERROR, uR"([\u0001-\U0010FFFF])",
-             uR"([\u0001-\U0010FFFF])"},
-            {uR"([\u0000 ^ -])", U_MALFORMED_SET, uR"([\u0000])", uR"([\u0000])"},
-            {uR"([^ [ [^] ] ])", U_ZERO_ERROR, uR"([^[[\u0000-\U0010FFFF]]])", u"[]"},
-            // An escape can access any mapped character, even if the unescaped
-            // character would be syntax.
-            {uR"([ \[ ])", U_ZERO_ERROR, uR"([[{leftSquareBracket}]])", uR"([{leftSquareBracket}])"},
-            {uR"([$])", U_ZERO_ERROR, uR"([$])", uR"([\uFFFF])"},
-            {u"[:Co:]", U_ZERO_ERROR, u"[:Co:]", u"[\uE000-\uF8FF\U000F0000-\U000FFFFD\U00100000-\U0010FFFD]"},
-            {uR"(\p{Co})", U_ZERO_ERROR, uR"(\p{Co})", u"[\uE000-\uF8FF\U000F0000-\U000FFFFD\U00100000-\U0010FFFD]"},
-        }) {
-        UnicodeString actual;
-        UErrorCode errorCode = U_ZERO_ERROR;
-        const UnicodeSet set(expression, USET_IGNORE_SPACE, &symbols, errorCode);
-        if (errorCode != expectedErrorCode) {
-            errln(u"Parsing " + expression + u": Expected " + u_errorName(expectedErrorCode) + ", got " +
-                  u_errorName(errorCode));
-        }
-        if (set.toPattern(actual) != expectedPattern) {
-            errln(u"UnicodeSet(R\"(" + expression + u")\").toPattern() expected " + expectedPattern +
-                  ", got " + actual);
-        }
-        if (UnicodeSet(set).complement().complement().toPattern(actual) != expectedRegeneratedPattern) {
-            errln(u"UnicodeSet(R\"(" + expression +
-                  u")\").complement().complement().toPattern() expected " + expectedRegeneratedPattern +
-                  ", got " + actual);
         }
     }
 #pragma GCC diagnostic pop
@@ -2449,7 +2402,7 @@ void UnicodeSetTest::copyWithIterator(UnicodeSet& t, const UnicodeSet& s, UBool 
         }
     }
 }
-    
+
 UBool UnicodeSetTest::checkEqual(const UnicodeSet& s, const UnicodeSet& t, const char* message) {
     return checkEqual(*this, s, t, message);
 }
@@ -2559,7 +2512,7 @@ UnicodeSetTest::expectPattern(UnicodeSet& set,
         }
     }
     // the result of calling set.toPattern(), which is the string representation of
-    // this set(set), is passed to a  UnicodeSet constructor, and tested that it 
+    // this set(set), is passed to a  UnicodeSet constructor, and tested that it
     // will produce another set that is equal to this one.
     UnicodeString temppattern;
     set.toPattern(temppattern);
@@ -4696,7 +4649,7 @@ void UnicodeSetTest::TestToPatternOutput() {
             // TODO(egg): PDUTS #61 disallows the space before ^.
             {uR"([: ^general category = punctuation :])", uR"([: ^general category = punctuation :])"},
             {uR"(\P{ gc = punctuation })", uR"(\P{ gc = punctuation })"},
-            {uR"(\N{ latin small letter a })", uR"(\N{ latin small letter a })"},
+            {uR"([\N{ latin small letter a }])", uR"([a])"},
             // If there is any Restriction among the terms, its syntax is mostly as-is (spaces are
             // still eliminated), with the exception that an initial UnescapedHyphenMinus gets escaped.
             // This is applied recursively, so innermost ranges-only UnicodeSets get normalized.
@@ -4712,9 +4665,15 @@ void UnicodeSetTest::TestToPatternOutput() {
             // Escapes are removed even when the syntax is preserved.
             {uR"([ { \x5A e i c h e n k e t t e } [] \x5Aeichenmenge ])",
             u"[{Zeichenkette}[]Zeichenmenge]"},
-            // A named-element is currently a nested set, so it is preserved and causes the syntax to be
-            // preserved.
-            {uR"([ \N{LATIN CAPITAL LETTER Z}eichenmenge ])", uR"([\N{LATIN CAPITAL LETTER Z}eichenmenge])"},
+            // In ICU 78 and earlier, a named-element was a nested set, so it was preserved and
+            // caused the syntax to be preserved.  Now it is treated like an escape.
+            {uR"([ \N{LATIN CAPITAL LETTER Z}eichenmenge ])", uR"([Zceg-imn])"},
+            // This was ill-formed in ICU 78 and earlier (in a convoluted way:
+            // {\N{LATIN CAPITAL LETTER Z} was a well-formed string literal, but then the second }
+            // was unpaired).
+            {uR"([ {\N{LATIN CAPITAL LETTER Z}eichenkette} ])", uR"([{Zeichenkette}])"},
+            // This used to be equal to [A] in ICU 78 and earlier.
+            {uR"([ \N{LATIN CAPITAL LETTER A} - \N{LATIN CAPITAL LETTER Z} ])", uR"([A-Z])"},
             // An anchor also causes the syntax to be preserved.
             {u"[ d-z a-c $ ]", u"[d-za-c$]"},
             {u"[ - a-c d-z $ ]", uR"([\-a-cd-z$])"},
@@ -4778,6 +4737,15 @@ void UnicodeSetTest::TestParseErrors() {
             u"[[a]&z]",
             // "Missing ']'".
             u"[a-z",
+            // This was a well-formed string in ICU 78 and earlier, with the value
+            // "N{LATINCAPITALLETTERZ".
+            uR"([{\N{LATIN CAPITAL LETTER Z}])",
+            // This was a well-formed set in ICU 78 and earlier; now it must be enclosed in square
+            // brackets.
+            uR"(\N{ latin small letter a })",
+            // TODO(egg): Well-formed in Java, ill-formed in ICU4C in ICU 78 and earlier.
+            u"[a-{z}]",
+            u"[{a}-z]",
         }) {
         UErrorCode errorCode = U_ZERO_ERROR;
         const UnicodeSet set(expression, errorCode);
