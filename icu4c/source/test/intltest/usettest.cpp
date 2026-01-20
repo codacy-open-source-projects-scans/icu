@@ -4646,8 +4646,6 @@ void UnicodeSetTest::TestToPatternOutput() {
             {uR"(\p{P})", uR"(\p{P})"},
             {uR"(\p{gc=P})", uR"(\p{gc=P})"},
             {uR"([: general category = punctuation :])", uR"([: general category = punctuation :])"},
-            // TODO(egg): PDUTS #61 disallows the space before ^.
-            {uR"([: ^general category = punctuation :])", uR"([: ^general category = punctuation :])"},
             {uR"(\P{ gc = punctuation })", uR"(\P{ gc = punctuation })"},
             {uR"([\N{ latin small letter a }])", uR"([a])"},
             // If there is any Restriction among the terms, its syntax is mostly as-is (spaces are
@@ -4766,6 +4764,11 @@ void UnicodeSetTest::TestParseErrors() {
             uR"([:Some_Property=\u:])",
             uR"(\p{Some_Property=\N{SOME CHARACTER}})",
             uR"([\N{}])",
+            // Well-formed in ICU 78 and earlier, disallowed by ICU-23308.
+            uR"(\p{XID_Continue=})",
+            uR"(\p{Uppercase_Letter=})",
+            // Well-formed in ICU 78 and earlier, disallowed by ICU-23306.
+            uR"([: ^general category = punctuation :])",
         }) {
         UErrorCode errorCode = U_ZERO_ERROR;
         const UnicodeSet set(expression, errorCode);

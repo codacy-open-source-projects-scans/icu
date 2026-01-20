@@ -678,10 +678,10 @@ class UnicodeSet::Lexer {
         // named-element: while ICU does not support string-valued properties and thus has no
         // use for escapes, we still want to lex through escapes to allow downstream
         // implementations (mostly unicodetools) to implement string-valued properties.
+        const UChar32 third = chars_.next(charsOptions_ & ~(RuleCharacterIterator::PARSE_ESCAPES |
+                                                            RuleCharacterIterator::SKIP_WHITESPACE),
+                                          unusedEscaped, errorCode);
         if (first == u'\\') {
-            const UChar32 third = chars_.next(charsOptions_ & ~(RuleCharacterIterator::PARSE_ESCAPES |
-                                                                RuleCharacterIterator::SKIP_WHITESPACE),
-                                              unusedEscaped, errorCode);
             if (third != u'{') {
                 errorCode = U_ILLEGAL_ARGUMENT_ERROR;
                 return {};
@@ -689,13 +689,6 @@ class UnicodeSet::Lexer {
             exteriorlyNegated = second == u'P';
             queryExpressionStart = parsePosition_.getIndex();
         } else {
-            // Skip whitespace here regardless of the options, as ICU used to do that.
-            // TODO(egg): PD UTS #61 does not allow space within [:^ (even though it otherwise specifies
-            // the space-insensitive version of the syntax).  Either the line below needs to change to
-            // match the other branch of the if statement, or PD UTS #61 needs to be fixed.
-            const UChar32 third = chars_.next((charsOptions_ & ~RuleCharacterIterator::PARSE_ESCAPES) |
-                                                  RuleCharacterIterator::SKIP_WHITESPACE,
-                                              unusedEscaped, errorCode);
             if (third == u'^') {
                 exteriorlyNegated = true;
                 queryExpressionStart = parsePosition_.getIndex();
@@ -745,6 +738,14 @@ class UnicodeSet::Lexer {
                 if (queryOperatorPosition.has_value()) {
                     propertyPredicate =
                         pattern_.tempSubStringBetween(*queryOperatorPosition + 1, queryExpressionLimit);
+                    if (propertyPredicate.isEmpty()) {
+                        // \p{X=} is valid if X is a string-valued or miscellaneous property, but
+                        // ICU does not support those.  Thus, it is invalid for ICU purposes, and
+                        // passing an empty propertyPredicate to applyPropertyAlias can be valid
+                        // (this is how we represent \p{X}), so we need to return the error here.
+                        errorCode = U_ILLEGAL_ARGUMENT_ERROR;
+                        return {};
+                    }
                 }
                 UnicodeSet result;
                 result.applyPropertyAlias(

@@ -970,7 +970,7 @@ class LocaleFallbackData {
         t.put("wme", "Deva");
         t.put("wne", "Arab");
         t.put("wni", "Arab");
-        t.put("wsg", "Gong");
+        t.put("wsg", "Telu");
         t.put("wsv", "Arab");
         t.put("wtm", "Deva");
         t.put("wuu", "Hans");
