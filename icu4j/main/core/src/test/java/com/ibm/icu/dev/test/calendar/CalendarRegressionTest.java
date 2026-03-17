@@ -180,6 +180,7 @@ public class CalendarRegressionTest extends CoreTestFmwk {
     }
 
     @Test
+    @SuppressWarnings("SelfEquals")
     public void Test4035301() {
 
         try {
@@ -1606,6 +1607,7 @@ public class CalendarRegressionTest extends CoreTestFmwk {
         GregorianCalendar cal = new GregorianCalendar();
         cal.setFirstDayOfWeek(Calendar.MONDAY);
         cal.setMinimalDaysInFirstWeek(4);
+        @SuppressWarnings("MisusedDayOfYear")
         DateFormat fmt = new SimpleDateFormat("E dd MMM yyyy  'DOY='D 'WOY='w");
         fmt.setCalendar(cal);
 
