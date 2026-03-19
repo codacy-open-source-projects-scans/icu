@@ -10,9 +10,9 @@ jobs:
     strategy:
       matrix:
         container:  # Updated in BRS
-        - ubuntu-22.04
-        - macos-14
-        - windows-2022
+        - ubuntu-24.04
+        - macos-15
+        - windows-2025
         build_type: [ Debug, Release ]
 
 

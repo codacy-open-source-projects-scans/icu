@@ -398,7 +398,6 @@ uset_isFrozen(const USet *set);
  * uset_contains() and uset_span().
  * A frozen set will not be modified. (It remains frozen.)
  * @param set the set
- * @return the same set, now frozen
  * @see uset_isFrozen
  * @see uset_cloneAsThawed
  * @stable ICU 3.8

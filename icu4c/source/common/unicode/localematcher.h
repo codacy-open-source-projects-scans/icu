@@ -303,7 +303,6 @@ public:
         /**
          * Constructs a builder used in chaining parameters for building a LocaleMatcher.
          *
-         * @return a new Builder object
          * @stable ICU 65
          */
         Builder() {}

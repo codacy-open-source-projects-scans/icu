@@ -201,7 +201,6 @@ public:
      *                  pass the U_SUCCESS() test, or else the function returns
      *                  immediately. Check for U_FAILURE() on output or use with
      *                  function chaining. (See User Guide for details.)
-     * @return dest
      * @stable ICU 4.6
      */
     virtual void
@@ -219,7 +218,6 @@ public:
      *                  pass the U_SUCCESS() test, or else the function returns
      *                  immediately. Check for U_FAILURE() on output or use with
      *                  function chaining. (See User Guide for details.)
-     * @return dest
      * @stable ICU 4.6
      */
     virtual void
@@ -237,7 +235,6 @@ public:
      *                  pass the U_SUCCESS() test, or else the function returns
      *                  immediately. Check for U_FAILURE() on output or use with
      *                  function chaining. (See User Guide for details.)
-     * @return dest
      * @stable ICU 4.6
      */
     virtual void
@@ -255,7 +252,6 @@ public:
      *                  pass the U_SUCCESS() test, or else the function returns
      *                  immediately. Check for U_FAILURE() on output or use with
      *                  function chaining. (See User Guide for details.)
-     * @return dest
      * @stable ICU 4.6
      */
     virtual void

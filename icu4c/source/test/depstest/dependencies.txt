@@ -147,6 +147,7 @@ group: cplusplus
 
 group: iostream
     "std::basic_ios<char, std::char_traits<char> >::clear(std::_Ios_Iostate)"
+    "std::basic_ios<char, std::char_traits<char>>::clear(std::_Ios_Iostate)"
     "std::basic_ios<char, std::char_traits<char> >::eof() const"
     "std::basic_ios<char, std::char_traits<char> >::fail() const"
     "std::basic_ostream<char, std::char_traits<char> >& std::operator<< <std::char_traits<char> >(std::basic_ostream<char, std::char_traits<char> >&, char const*)"
@@ -157,6 +158,7 @@ group: iostream
     std::istream::putback(char)
     # Additional symbols in an optimized build.
     "std::basic_ostream<char, std::char_traits<char> >& std::__ostream_insert<char, std::char_traits<char> >(std::basic_ostream<char, std::char_traits<char> >&, char const*, long)"
+    "std::basic_ostream<char, std::char_traits<char>>& std::__ostream_insert<char, std::char_traits<char>>(std::basic_ostream<char, std::char_traits<char>>&, char const*, long)"
 
 # ICU common library --------------------------------------------------------- #
 
