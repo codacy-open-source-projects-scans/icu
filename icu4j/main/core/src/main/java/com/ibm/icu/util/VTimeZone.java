@@ -1743,7 +1743,7 @@ public class VTimeZone extends BasicTimeZone implements Cloneable {
         writer.write(Integer.toString(dayOfMonth));
 
         if (untilTime != MAX_TIME) {
-            appendUNTIL(writer, getDateTimeString(untilTime + fromOffset));
+            appendUNTIL(writer, getUTCDateTimeString(untilTime));
         }
         writer.write(NEWLINE);
 
@@ -1774,7 +1774,7 @@ public class VTimeZone extends BasicTimeZone implements Cloneable {
         writer.write(ICAL_DOW_NAMES[dayOfWeek - 1]); // SU, MO, TU...
 
         if (untilTime != MAX_TIME) {
-            appendUNTIL(writer, getDateTimeString(untilTime + fromOffset));
+            appendUNTIL(writer, getUTCDateTimeString(untilTime));
         }
         writer.write(NEWLINE);
 
