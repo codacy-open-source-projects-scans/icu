@@ -4713,6 +4713,12 @@ void UnicodeSetTest::TestToPatternOutput() {
             // Ill-formed in ICU4C 78 and earlier, made well-formed by ICU-23312.
             {u"[a-{z}]", u"[a-z]"},
             {u"[{a}-z]", u"[a-z]"},
+            {uR"([\N{PRESENTATION FORM FOR VERTICAL RIGHT WHITE LENTICULAR BRAKCET}])", u"[︘]"},
+            {uR"([\N{bell}])", u"[🔔]"},
+            // Ill-formed in ICU 78 and earlier:
+            {uR"([\N{PRESENTATION FORM FOR VERTICAL RIGHT WHITE LENTICULAR BRACKET}])", u"[︘]"},
+            {uR"([\N{Hangul jungseong O-E}])", u"[ᆀ]"},
+            {uR"([\N{Hangul jungseong OE}])", u"[ᅬ]"},
         }) {
         UErrorCode errorCode = U_ZERO_ERROR;
         const UnicodeSet set(expression, errorCode);
@@ -4832,6 +4838,10 @@ void UnicodeSetTest::TestParseErrors() {
             // Doubly negated property queries.
             uR"(\P{Decomposition_Type≠compat})",
             u"[:^Noncharacter_Code_Point≠No:]",
+            // This should be [\a]; tracked by ICU-8963.
+            uR"([\N{BEL}])",
+            // This should be [œ]; tracked by ICU-3736.
+            uR"([\N{Latin small ligature o-e}])",
         }) {
         UErrorCode errorCode = U_ZERO_ERROR;
         const UnicodeSet set(expression, errorCode);
