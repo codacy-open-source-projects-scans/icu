@@ -448,8 +448,19 @@ public class PluralFormat extends UFormat {
         ulocale = locale;
         pluralRules = (rules == null) ? PluralRules.forLocale(ulocale, type) : rules;
         resetPattern();
-        this.numberFormat =
-                (numberFormat == null) ? NumberFormat.getInstance(ulocale) : numberFormat;
+        this.numberFormat = numberFormat;
+        initializeNumberFormat();
+    }
+
+    private void initializeNumberFormat() {
+        if (numberFormat == null
+                && ((msgPattern == null || msgPattern.countParts() == 0)
+                        || (pattern != null && pattern.indexOf('#') >= 0))) {
+            // The pattern may need to format a number later.
+            // Let's cache this expensive to use number format.
+            this.numberFormat = NumberFormat.getInstance(ulocale);
+        }
+        // either we use the existing one, or the pattern doesn't format a number.
     }
 
     private void resetPattern() {
@@ -481,6 +492,7 @@ public class PluralFormat extends UFormat {
             resetPattern();
             throw e;
         }
+        initializeNumberFormat();
     }
 
     /**
@@ -672,24 +684,29 @@ public class PluralFormat extends UFormat {
         double numberMinusOffset = number - offset;
         String numberString;
         IFixedDecimal dec;
-        if (numberFormat instanceof DecimalFormat) {
-            // Call NumberFormatter to get both the DecimalQuantity and the string.
-            LocalizedNumberFormatter f = ((DecimalFormat) numberFormat).toNumberFormatter();
-            FormattedNumber result;
-            if (offset == 0) {
-                // could be BigDecimal etc.
-                result = f.format(numberObject);
+        if (numberFormat != null) {
+            if (numberFormat instanceof DecimalFormat) {
+                // Call NumberFormatter to get both the DecimalQuantity and the string.
+                LocalizedNumberFormatter f = ((DecimalFormat) numberFormat).toNumberFormatter();
+                FormattedNumber result;
+                if (offset == 0) {
+                    // could be BigDecimal etc.
+                    result = f.format(numberObject);
+                } else {
+                    result = f.format(numberMinusOffset);
+                }
+                numberString = result.toString();
+                dec = result.getFixedDecimal();
             } else {
-                result = f.format(numberMinusOffset);
+                if (offset == 0) {
+                    numberString = numberFormat.format(numberObject);
+                } else {
+                    numberString = numberFormat.format(numberMinusOffset);
+                }
+                dec = new FixedDecimal(numberMinusOffset);
             }
-            numberString = result.toString();
-            dec = result.getFixedDecimal();
         } else {
-            if (offset == 0) {
-                numberString = numberFormat.format(numberObject);
-            } else {
-                numberString = numberFormat.format(numberMinusOffset);
-            }
+            numberString = "";
             dec = new FixedDecimal(numberMinusOffset);
         }
 

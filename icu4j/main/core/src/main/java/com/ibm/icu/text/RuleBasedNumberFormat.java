@@ -18,7 +18,6 @@ import com.ibm.icu.math.BigDecimal;
 import com.ibm.icu.util.ULocale;
 import com.ibm.icu.util.ULocale.Category;
 import com.ibm.icu.util.UResourceBundle;
-import com.ibm.icu.util.UResourceBundleIterator;
 import java.math.BigInteger;
 import java.text.FieldPosition;
 import java.text.ParsePosition;
@@ -822,16 +821,13 @@ public class RuleBasedNumberFormat extends NumberFormat implements Cloneable {
         ULocale uloc = bundle.getULocale();
         setLocale(uloc, uloc);
 
-        StringBuilder description = new StringBuilder();
+        String description;
         String[][] localizations = null;
 
         try {
-            ICUResourceBundle rules = bundle.getWithFallback("RBNFRules/" + rulenames[format - 1]);
-            UResourceBundleIterator it = rules.getIterator();
-            while (it.hasNext()) {
-                description.append(it.nextString());
-            }
+            description = bundle.getStringWithFallback("RBNFRules/" + rulenames[format - 1]);
         } catch (MissingResourceException e1) {
+            description = "";
         }
 
         // We use findTopLevel() instead of get() because
@@ -845,7 +841,7 @@ public class RuleBasedNumberFormat extends NumberFormat implements Cloneable {
         }
         // else there are no localized names. It's not that important.
 
-        init(description.toString(), localizations);
+        init(description, localizations);
     }
 
     private static final String[] rulenames = {
@@ -1887,13 +1883,33 @@ public class RuleBasedNumberFormat extends NumberFormat implements Cloneable {
      * @return The description with all the whitespace that follows semicolons taken out.
      */
     private StringBuilder stripWhitespace(String description) {
-        // since we don't have a method that deletes characters (why?!!)
-        // create a new StringBuffer to copy the text into
-        StringBuilder result = new StringBuilder();
         int descriptionLength = description.length();
 
-        // iterate through the characters...
+        // Find the first semicolon followed by whitespace or another semicolon,
+        // or leading whitespace/semicolons. Everything before that point is already clean.
         int start = 0;
+        if (descriptionLength > 0) {
+            char first = description.charAt(0);
+            if (!PatternProps.isWhiteSpace(first) && first != ';') {
+                for (int i = 0; i < descriptionLength - 1; ++i) {
+                    if (description.charAt(i) == ';') {
+                        char next = description.charAt(i + 1);
+                        if (PatternProps.isWhiteSpace(next) || next == ';') {
+                            start = i + 1;
+                            break;
+                        }
+                    }
+                }
+                if (start == 0) {
+                    // No whitespace to strip anywhere.
+                    return new StringBuilder(description);
+                }
+            }
+        }
+
+        // Copy the clean prefix, then strip whitespace from the rest.
+        StringBuilder result = new StringBuilder(description.substring(0, start));
+
         char ch;
         while (start < descriptionLength) {
             // Seek to the first non-whitespace character...

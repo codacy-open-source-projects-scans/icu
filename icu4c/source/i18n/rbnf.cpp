@@ -35,6 +35,7 @@
 #include "uresimp.h"
 #include "nfrs.h"
 #include "number_decimalquantity.h"
+#include <string_view>
 
 // debugging
 // #define RBNF_DEBUG
@@ -52,10 +53,11 @@ static const char16_t gPercentPercent[] =
 
 // All urbnf objects are created through openRules, so we init all of the
 // Unicode string constants required by rbnf, nfrs, or nfr here.
-static const char16_t gLenientParse[] =
+static constexpr char16_t gLenientParse[] =
 {
     0x25, 0x25, 0x6C, 0x65, 0x6E, 0x69, 0x65, 0x6E, 0x74, 0x2D, 0x70, 0x61, 0x72, 0x73, 0x65, 0x3A, 0
 }; /* "%%lenient-parse:" */
+static constexpr auto gLenientParseLen = std::u16string_view(gLenientParse).length();
 static const char16_t gSemiColon = 0x003B;
 static const char16_t gSemiPercent[] =
 {
@@ -140,21 +142,21 @@ LocalizationInfo::operator==(const LocalizationInfo* rhs) const {
         
         int32_t rsc = getNumberOfRuleSets();
         if (rsc == rhs->getNumberOfRuleSets()) {
-            for (int i = 0; i < rsc; ++i) {
+            for (int32_t i = 0; i < rsc; ++i) {
                 if (!streq(getRuleSetName(i), rhs->getRuleSetName(i))) {
                     return false;
                 }
             }
             int32_t dlc = getNumberOfDisplayLocales();
             if (dlc == rhs->getNumberOfDisplayLocales()) {
-                for (int i = 0; i < dlc; ++i) {
+                for (int32_t i = 0; i < dlc; ++i) {
                     const char16_t* locale = getLocaleName(i);
                     int32_t ix = rhs->indexForLocale(locale);
                     // if no locale, ix is -1, getLocaleName returns null, so streq returns false
                     if (!streq(locale, rhs->getLocaleName(ix))) {
                         return false;
                     }
-                    for (int j = 0; j < rsc; ++j) {
+                    for (int32_t j = 0; j < rsc; ++j) {
                         if (!streq(getDisplayName(i, j), rhs->getDisplayName(ix, j))) {
                             return false;
                         }
@@ -169,7 +171,7 @@ LocalizationInfo::operator==(const LocalizationInfo* rhs) const {
 
 int32_t
 LocalizationInfo::indexForLocale(const char16_t* locale) const {
-    for (int i = 0; i < getNumberOfDisplayLocales(); ++i) {
+    for (int32_t i = 0; i < getNumberOfDisplayLocales(); ++i) {
         if (streq(locale, getLocaleName(i))) {
             return i;
         }
@@ -180,7 +182,7 @@ LocalizationInfo::indexForLocale(const char16_t* locale) const {
 int32_t
 LocalizationInfo::indexForRuleSet(const char16_t* ruleset) const {
     if (ruleset) {
-        for (int i = 0; i < getNumberOfRuleSets(); ++i) {
+        for (int32_t i = 0; i < getNumberOfRuleSets(); ++i) {
             if (streq(ruleset, getRuleSetName(i))) {
                 return i;
             }
@@ -204,7 +206,7 @@ public:
     
     ~VArray() {
         if (deleter) {
-            for (int i = 0; i < size; ++i) {
+            for (int32_t i = 0; i < size; ++i) {
                 (*deleter)(buf[i]);
             }
         }
@@ -686,10 +688,8 @@ StringLocalizationInfo::getDisplayName(int32_t localeIndex, int32_t ruleIndex) c
 RuleBasedNumberFormat::RuleBasedNumberFormat(const UnicodeString& description, 
                                              const UnicodeString& locs,
                                              const Locale& alocale, UParseError& perror, UErrorCode& status)
-  : locale(alocale)
+  : RuleBasedNumberFormat(description, StringLocalizationInfo::create(locs, perror, status), alocale, perror, status)
 {
-    LocalizationInfo* locinfo = StringLocalizationInfo::create(locs, perror, status);
-    init(description, locinfo, perror, status);
 }
 
 RuleBasedNumberFormat::RuleBasedNumberFormat(const UnicodeString& description, 
@@ -729,7 +729,7 @@ RuleBasedNumberFormat::RuleBasedNumberFormat(URBNFRuleSetTag tag, const Locale& 
         return;
     }
 
-    const char* rules_tag = "RBNFRules";
+    constexpr auto rules_tag = "RBNFRules";
     const char* fmt_tag = "";
     switch (tag) {
     case URBNF_SPELLOUT: fmt_tag = "SpelloutRules"; break;
@@ -747,27 +747,12 @@ RuleBasedNumberFormat::RuleBasedNumberFormat(URBNFRuleSetTag tag, const Locale& 
         setLocaleIDs(ures_getLocaleByType(nfrb, ULOC_VALID_LOCALE, &status),
                      ures_getLocaleByType(nfrb, ULOC_ACTUAL_LOCALE, &status));
 
-        UResourceBundle* rbnfRules = ures_getByKeyWithFallback(nfrb, rules_tag, nullptr, &status);
-        if (U_FAILURE(status)) {
-            ures_close(nfrb);
+        nfrb = ures_getByKeyWithFallback(nfrb, rules_tag, nfrb, &status);
+        nfrb = ures_getByKeyWithFallback(nfrb, fmt_tag, nfrb, &status);
+        if (U_SUCCESS(status)) {
+            UParseError perror;
+            init(ures_getUnicodeString(nfrb, &status), locinfo, perror, status);
         }
-        UResourceBundle* ruleSets = ures_getByKeyWithFallback(rbnfRules, fmt_tag, nullptr, &status);
-        if (U_FAILURE(status)) {
-            ures_close(rbnfRules);
-            ures_close(nfrb);
-            return;
-        }
-
-        UnicodeString desc;
-        while (ures_hasNext(ruleSets)) {
-           desc.append(ures_getNextUnicodeString(ruleSets,nullptr,&status));
-        }
-        UParseError perror;
-
-        init(desc, locinfo, perror, status);
-
-        ures_close(ruleSets);
-        ures_close(rbnfRules);
     }
     ures_close(nfrb);
 }
@@ -1396,7 +1381,7 @@ RuleBasedNumberFormat::init(const UnicodeString& rules, LocalizationInfo* locali
     // is, pull them out into our temporary holding place for them,
     // and delete them from the description before the real desciption-
     // parsing code sees them
-    int32_t lp = description.indexOf(gLenientParse, -1, 0);
+    int32_t lp = description.indexOf(gLenientParse, gLenientParseLen, 0);
     if (lp != -1) {
         // we've got to make sure we're not in the middle of a rule
         // (where "%%lenient-parse" would actually get treated as
@@ -1405,25 +1390,24 @@ RuleBasedNumberFormat::init(const UnicodeString& rules, LocalizationInfo* locali
             // locate the beginning and end of the actual collation
             // rules (there may be whitespace between the name and
             // the first token in the description)
-            int lpEnd = description.indexOf(gSemiPercent, 2, lp);
+            int32_t lpEnd = description.indexOf(gSemiPercent, 2, lp);
 
             if (lpEnd == -1) {
                 lpEnd = description.length() - 1;
             }
-            int lpStart = lp + u_strlen(gLenientParse);
+            int32_t lpStart = lp + gLenientParseLen;
             while (PatternProps::isWhiteSpace(description.charAt(lpStart))) {
                 ++lpStart;
             }
 
             // copy out the lenient-parse rules and delete them
             // from the description
-            lenientParseRules = new UnicodeString();
+            lenientParseRules = new UnicodeString(description, lpStart, lpEnd - lpStart);
             /* test for nullptr */
             if (lenientParseRules == nullptr) {
                 status = U_MEMORY_ALLOCATION_ERROR;
                 return;
             }
-            lenientParseRules->setTo(description, lpStart, lpEnd - lpStart);
 
             description.remove(lp, lpEnd + 1 - lp);
         }
@@ -1447,7 +1431,7 @@ RuleBasedNumberFormat::init(const UnicodeString& rules, LocalizationInfo* locali
         return;
     }
 
-    for (int i = 0; i <= numRuleSets; ++i) {
+    for (int32_t i = 0; i <= numRuleSets; ++i) {
         fRuleSets[i] = nullptr;
     }
 
@@ -1470,7 +1454,7 @@ RuleBasedNumberFormat::init(const UnicodeString& rules, LocalizationInfo* locali
     }
 
     {
-        int curRuleSet = 0;
+        int32_t curRuleSet = 0;
         int32_t start = 0;
         for (int32_t p = description.indexOf(gSemiPercent, 2, 0); p != -1; p = description.indexOf(gSemiPercent, 2, start)) {
             ruleSetDescriptions[curRuleSet].setTo(description, start, p + 1 - start);
@@ -1508,12 +1492,10 @@ RuleBasedNumberFormat::init(const UnicodeString& rules, LocalizationInfo* locali
     // Now that we know all the rule names, we can go back through
     // the temporary descriptions list and finish setting up the substructure
     // (and we throw away the temporary descriptions as we go)
-    {
-        for (int i = 0; i < numRuleSets; i++) {
-            fRuleSets[i]->parseRules(ruleSetDescriptions[i], status);
-            if (U_FAILURE(status)) {
-                return;
-            }
+    for (int32_t i = 0; i < numRuleSets; i++) {
+        fRuleSets[i]->parseRules(ruleSetDescriptions[i], status);
+        if (U_FAILURE(status)) {
+            return;
         }
     }
 
@@ -1597,10 +1579,31 @@ RuleBasedNumberFormat::initCapitalizationContextInfo(const Locale& thelocale)
 void
 RuleBasedNumberFormat::stripWhitespace(UnicodeString& description)
 {
-    // iterate through the characters...
-    UnicodeString result;
+    // Find the first semicolon followed by whitespace or another semicolon,
+    // or leading whitespace/semicolons. Everything before that point is already clean.
+    int32_t len = description.length();
+    int32_t start = 0;
+    if (len > 0) {
+        UChar ch = description.charAt(0);
+        if (!PatternProps::isWhiteSpace(ch) && ch != gSemiColon) {
+            for (int32_t i = 0; i < len - 1; ++i) {
+                if (description.charAt(i) == gSemiColon) {
+                    UChar next = description.charAt(i + 1);
+                    if (PatternProps::isWhiteSpace(next) || next == gSemiColon) {
+                        start = i + 1;
+                        break;
+                    }
+                }
+            }
+            if (start == 0) {
+                return;  // No whitespace to strip anywhere.
+            }
+        }
+    }
 
-    int start = 0;
+    // Copy the clean prefix, then strip whitespace from the rest.
+    UnicodeString result(description, 0, start);
+
     UChar ch;
     while (start < description.length()) {
         // Seek to the first non-whitespace character...
