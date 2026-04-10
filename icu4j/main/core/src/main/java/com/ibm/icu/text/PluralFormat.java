@@ -791,7 +791,7 @@ public class PluralFormat extends UFormat {
      * @return Returns the PluralRules type. For example, it could be "zero", "one", "two", "few",
      *     "many" or "other")
      */
-    /*package*/ String parseType(String source, RbnfLenientScanner scanner, FieldPosition pos) {
+    /*package*/ String parseType(String source, FieldPosition pos) {
         // If no pattern was applied, return null.
         if (msgPattern == null || msgPattern.countParts() == 0) {
             pos.setBeginIndex(-1);
@@ -835,20 +835,7 @@ public class PluralFormat extends UFormat {
             }
 
             String currArg = pattern.substring(partStart.getLimit(), partLimit.getIndex());
-            if (scanner != null) {
-                // Check if non-lenient rule finds the text before call lenient parsing
-                int tempPos = source.indexOf(currArg, startingAt);
-                if (tempPos >= 0) {
-                    currMatchIndex = tempPos;
-                } else {
-                    // If lenient parsing is turned ON, we've got some time consuming parsing ahead
-                    // of us.
-                    int[] scannerMatchResult = scanner.findText(source, currArg, startingAt);
-                    currMatchIndex = scannerMatchResult[0];
-                }
-            } else {
-                currMatchIndex = source.indexOf(currArg, startingAt);
-            }
+            currMatchIndex = source.indexOf(currArg, startingAt);
             if (currMatchIndex >= 0
                     && currMatchIndex >= matchedIndex
                     && (matchedWord == null || currArg.length() > matchedWord.length())) {

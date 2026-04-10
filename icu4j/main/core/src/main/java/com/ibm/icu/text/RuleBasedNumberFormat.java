@@ -638,6 +638,12 @@ public class RuleBasedNumberFormat extends NumberFormat implements Cloneable {
     private boolean lenientParse = false;
 
     /**
+     * Case folding option for lenient parsing. Uses Turkic case folding for Turkish and Azerbaijani
+     * locales.
+     */
+    transient byte caseFoldOption = (byte) UCharacter.FOLD_CASE_DEFAULT;
+
+    /**
      * Specifies if one of the rules is unparseable. For example, there may be substitutions of the
      * same type in a rule.
      */
@@ -1356,6 +1362,11 @@ public class RuleBasedNumberFormat extends NumberFormat implements Cloneable {
      */
     public void setLenientParseMode(boolean enabled) {
         lenientParse = enabled;
+        if (enabled) {
+            // Eagerly initialize the scanner provider so that getLenientScannerProvider()
+            // is thread-safe when called from parse().
+            initializeLenientScannerProvider();
+        }
     }
 
     /**
@@ -1392,10 +1403,20 @@ public class RuleBasedNumberFormat extends NumberFormat implements Cloneable {
      * @stable ICU 4.4
      */
     public RbnfLenientScannerProvider getLenientScannerProvider() {
-        // there's a potential race condition if two threads try to set/get the scanner at
-        // the same time, but you get what you get, and you shouldn't be using this from
-        // multiple threads anyway.
         if (scannerProvider == null && lenientParse && !lookedForScanner) {
+            initializeLenientScannerProvider();
+        }
+
+        return scannerProvider;
+    }
+
+    /**
+     * Attempts to instantiate the default lenient scanner provider. Called eagerly from
+     * setLenientParseMode() so that getLenientScannerProvider() does not need to perform lazy
+     * initialization from parse() (thread safety).
+     */
+    private void initializeLenientScannerProvider() {
+        if (scannerProvider == null && !lookedForScanner) {
             try {
                 lookedForScanner = true;
                 Class<?> cls = Class.forName("com.ibm.icu.impl.text.RbnfScannerProviderImpl");
@@ -1406,8 +1427,6 @@ public class RuleBasedNumberFormat extends NumberFormat implements Cloneable {
                 // any failure, we just ignore and return null
             }
         }
-
-        return scannerProvider;
     }
 
     /**
@@ -1576,7 +1595,7 @@ public class RuleBasedNumberFormat extends NumberFormat implements Cloneable {
      * @return The collator to use for lenient parsing, or null if lenient parsing is turned off.
      */
     RbnfLenientScanner getLenientScanner() {
-        if (lenientParse) {
+        if (lenientParse && lenientParseRules != null && !lenientParseRules.isEmpty()) {
             RbnfLenientScannerProvider provider = getLenientScannerProvider();
             if (provider != null) {
                 return provider.get(locale, lenientParseRules);
@@ -1695,6 +1714,14 @@ public class RuleBasedNumberFormat extends NumberFormat implements Cloneable {
      */
     private void init(String description, String[][] localizations) {
         initLocalizations(localizations);
+
+        // Use Turkic case folding for Turkish and Azerbaijani locales.
+        String lang = locale.getLanguage();
+        caseFoldOption =
+                (byte)
+                        (("tr".equals(lang) || "az".equals(lang))
+                                ? UCharacter.FOLD_CASE_EXCLUDE_SPECIAL_I
+                                : UCharacter.FOLD_CASE_DEFAULT);
 
         // start by stripping the trailing whitespace from all the rules
         // (this is all the whitespace following each semicolon in the
@@ -2052,10 +2079,12 @@ public class RuleBasedNumberFormat extends NumberFormat implements Cloneable {
                     // should only happen when deserializing, etc.
                     capitalizationBrkIter = BreakIterator.getSentenceInstance(locale);
                 }
+                // Clone the break iterator to avoid mutating it (thread safety).
+                BreakIterator iter = (BreakIterator) capitalizationBrkIter.clone();
                 return UCharacter.toTitleCase(
                         locale,
                         result,
-                        capitalizationBrkIter,
+                        iter,
                         UCharacter.TITLECASE_NO_LOWERCASE
                                 | UCharacter.TITLECASE_NO_BREAK_ADJUSTMENT);
             }

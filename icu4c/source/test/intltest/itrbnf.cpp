@@ -89,6 +89,7 @@ void IntlTestRBNF::runIndexedTest(int32_t index, UBool exec, const char* &name, 
         TESTCASE(37, TestUnparseableConflictingSubstitutions);
         TESTCASE(38, TestAmbiguousDelimiter);
         TESTCASE(39, TestDividedByZero);
+        TESTCASE(40, TestTurkishSpellout);
 #else
         TESTCASE(0, TestRBNFDisabled);
 #endif
@@ -258,7 +259,6 @@ IntlTestRBNF::TestAPI() {
     }
   }
 
-#if !UCONFIG_NO_COLLATION
   // test ruleset names
   {
     logln("Testing getNumberOfRuleSetNames, getRuleSetName and format using rule set names");
@@ -319,7 +319,6 @@ IntlTestRBNF::TestAPI() {
     }   
     status = U_ZERO_ERROR;
   }
-#endif
 
   // test API
   UnicodeString expected("four point five","");
@@ -1183,7 +1182,6 @@ IntlTestRBNF::TestEnglishSpellout()
 
         doTest(formatter, testData, true);
 
-#if !UCONFIG_NO_COLLATION
         formatter->setLenient(true);
         static const char* lpTestData[][2] = {
             { "fifty-7", "57" },
@@ -1195,7 +1193,6 @@ IntlTestRBNF::TestEnglishSpellout()
             { nullptr, nullptr}
         };
         doLenientParseTest(formatter, lpTestData);
-#endif
     }
     delete formatter;
 }
@@ -1270,14 +1267,12 @@ IntlTestRBNF::TestDurations()
         };
         doTest(formatter, fractionalTestData, false);
         
-#if !UCONFIG_NO_COLLATION
         formatter->setLenient(true);
         static const char* lpTestData[][2] = {
             { "2-51-33", "10,293" },
             { nullptr, nullptr}
         };
         doLenientParseTest(formatter, lpTestData);
-#endif
     }
     delete formatter;
 }
@@ -1391,8 +1386,24 @@ IntlTestRBNF::TestSpanishSpellout()
             { "234.567", "doscientos treinta y cuatro coma cinco seis siete" },
             { nullptr, nullptr}
         };
-        
+
         doTest(formatter, testData, true);
+
+        formatter->setLenient(true);
+        static const char* lpTestData[][2] = {
+                // NFD form of "dieciséis": s + e + combining acute + i + s
+                { "diecise\\u0301is", "16" },
+				// Accent missing.
+                { "dieciseis", "16" },
+                // Mixed case with NFD accent
+                { "DIECISE\\u0301IS", "16" },
+                // NFD form of "veintiséis"
+                { "veintise\\u0301is", "26" },
+                // Standard NFC form should still work
+                { "diecis\\u00e9is", "16" },
+            { nullptr, nullptr}
+        };
+        doLenientParseTest(formatter, lpTestData);
     }
     delete formatter;
 }
@@ -1439,15 +1450,15 @@ IntlTestRBNF::TestFrenchSpellout()
         
         doTest(formatter, testData, true);
         
-#if !UCONFIG_NO_COLLATION
         formatter->setLenient(true);
         static const char* lpTestData[][2] = {
             { "trente-et-un", "31" },
+            { "trente  et  un", "31" },
+            { "TRENTE ET UN", "31" },
             { "un cent quatre vingt dix huit", "198" },
             { nullptr, nullptr}
         };
         doLenientParseTest(formatter, lpTestData);
-#endif
     }
     delete formatter;
 }
@@ -2053,7 +2064,6 @@ IntlTestRBNF::TestAllLocales()
                 break;
             }
 
-#if !UCONFIG_NO_COLLATION
             for (unsigned int numidx = 0; numidx < UPRV_LENGTHOF(numbers); numidx++) {
                 double n = numbers[numidx];
                 UnicodeString str;
@@ -2113,7 +2123,6 @@ IntlTestRBNF::TestAllLocales()
                     }
                 }
             }
-#endif
             delete f;
         }
     }
@@ -2825,6 +2834,36 @@ IntlTestRBNF::TestDividedByZero() {
     UErrorCode status = U_ZERO_ERROR;
     RuleBasedNumberFormat rbnf(u"7060920374060940374/4:[]", Locale::getUS(), perror, status);
     assertEquals("base is too large", U_NUMBER_ARG_OUTOFBOUNDS_ERROR, status);
+}
+
+void
+IntlTestRBNF::TestTurkishSpellout() {
+    UErrorCode status = U_ZERO_ERROR;
+    RuleBasedNumberFormat formatter(URBNF_SPELLOUT, Locale("tr"), status);
+
+    if (U_FAILURE(status)) {
+        errcheckln(status, "FAIL: could not construct formatter - %s", u_errorName(status));
+    } else {
+        static const char* const testData[][2] = {
+            { "2", "iki" },
+            { "6", "alt\\u0131" },
+            { nullptr, nullptr}
+        };
+
+        doTest(&formatter, testData, true);
+
+        formatter.setLenient(true);
+        static const char* lpTestData[][2] = {
+            { "iki", "2" },
+            { "iK\\u0130", "2" },
+            { "\\u0130ki", "2" },
+            { "\\u0130K\\u0130", "2" },
+            { "alt\\u0131", "6" },
+            { "ALTI", "6" },
+            { nullptr, nullptr}
+        };
+        doLenientParseTest(&formatter, lpTestData);
+	}
 }
 
 /* U_HAVE_RBNF */

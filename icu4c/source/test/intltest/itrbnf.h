@@ -170,6 +170,7 @@ public:
     void TestUnparseableConflictingSubstitutions();
     void TestAmbiguousDelimiter();
     void TestDividedByZero();
+    void TestTurkishSpellout();
 
 protected:
     virtual void doTest(RuleBasedNumberFormat* formatter, const char* const testData[][2], UBool testParsing);

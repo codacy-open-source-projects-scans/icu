@@ -14,8 +14,6 @@ pt{
             "0: =%digits-ordinal-masculine=;"
         }
         SpelloutRules{
-            "%%lenient-parse:"
-            "&[last primary ignorable ] << ' ' << ',' << '-' << '\u00AD';"
             "%spellout-numbering-year:"
             "x.x: =0.0=;"
             "0: =%spellout-numbering=;"

@@ -785,6 +785,10 @@ RuleBasedNumberFormat::operator=(const RuleBasedNumberFormat& rhs)
     setDefaultRuleSet(rhs.getDefaultRuleSetName(), status);
     setRoundingMode(rhs.getRoundingMode());
 
+    if (lenient) {
+        initializeCollator(status);
+    }
+
     capitalizationInfoSet = rhs.capitalizationInfoSet;
     capitalizationForUIListMenu = rhs.capitalizationForUIListMenu;
     capitalizationForStandAlone = rhs.capitalizationForStandAlone;
@@ -1202,7 +1206,11 @@ RuleBasedNumberFormat::adjustForCapitalizationContext(int32_t startPos,
                 (capitalizationContext == UDISPCTX_CAPITALIZATION_FOR_STANDALONE && capitalizationForStandAlone)) ) {
             // titlecase first word of currentResult, here use sentence iterator unlike current implementations
             // in LocaleDisplayNamesImpl::adjustForUsageAndContext and RelativeDateFormat::format
-            currentResult.toTitle(capitalizationBrkIter, locale, U_TITLECASE_NO_LOWERCASE | U_TITLECASE_NO_BREAK_ADJUSTMENT);
+            // Clone the break iterator to avoid mutating it in a const method (thread safety).
+            LocalPointer<BreakIterator> iter(capitalizationBrkIter->clone());
+            if (iter.isValid()) {
+                currentResult.toTitle(iter.getAlias(), locale, U_TITLECASE_NO_LOWERCASE | U_TITLECASE_NO_BREAK_ADJUSTMENT);
+            }
         }
     }
 #endif
@@ -1264,21 +1272,23 @@ RuleBasedNumberFormat::parse(const UnicodeString& text,
     }
 }
 
-#if !UCONFIG_NO_COLLATION
-
 void
 RuleBasedNumberFormat::setLenient(UBool enabled)
 {
     lenient = enabled;
+#if !UCONFIG_NO_COLLATION
     if (!enabled && collator) {
         delete collator;
         collator = nullptr;
+    } else if (enabled && collator == nullptr) {
+        // Eagerly initialize the collator so that getCollator() is thread-safe.
+        UErrorCode status = U_ZERO_ERROR;
+        initializeCollator(status);
     }
+#endif
 }
 
-#endif
-
-void 
+void
 RuleBasedNumberFormat::setDefaultRuleSet(const UnicodeString& ruleSetName, UErrorCode& status) {
     if (U_SUCCESS(status)) {
         if (ruleSetName.isEmpty()) {
@@ -1354,6 +1364,11 @@ RuleBasedNumberFormat::init(const UnicodeString& rules, LocalizationInfo* locali
     if (U_FAILURE(status)) {
         return;
     }
+
+    // Use Turkic case folding for Turkish and Azerbaijani locales.
+    const char* lang = locale.getLanguage();
+    caseFoldOption = (uprv_strcmp(lang, "tr") == 0 || uprv_strcmp(lang, "az") == 0)
+                     ? U_FOLD_CASE_EXCLUDE_SPECIAL_I : U_FOLD_CASE_DEFAULT;
 
     initializeDecimalFormatSymbols(status);
     initializeDefaultInfinityRule(status);
@@ -1686,55 +1701,52 @@ RuleBasedNumberFormat::dispose()
 //-----------------------------------------------------------------------
 
 /**
- * Returns the collator to use for lenient parsing.  The collator is lazily created:
- * this function creates it the first time it's called.
- * @return The collator to use for lenient parsing, or null if lenient parsing
+ * Initializes the collator for lenient parsing. Must be called from
+ * non-const methods (setLenient, operator=) so that getCollator() can
+ * be thread-safe.
+ */
+void
+RuleBasedNumberFormat::initializeCollator(UErrorCode &status)
+{
+#if !UCONFIG_NO_COLLATION
+    if (collator != nullptr || !fRuleSets) {
+        return;
+    }
+
+    Collator* temp = Collator::createInstance(locale, status);
+    RuleBasedCollator* newCollator;
+    if (U_SUCCESS(status) && (newCollator = dynamic_cast<RuleBasedCollator*>(temp)) != nullptr) {
+        if (lenientParseRules) {
+            UnicodeString rules(newCollator->getRules());
+            rules.append(*lenientParseRules);
+
+            newCollator = new RuleBasedCollator(rules, status);
+            // Exit if newCollator could not be created.
+            if (newCollator == nullptr) {
+                status = U_MEMORY_ALLOCATION_ERROR;
+                return;
+            }
+        } else {
+            temp = nullptr;
+        }
+        if (U_SUCCESS(status)) {
+            newCollator->setAttribute(UCOL_DECOMPOSITION_MODE, UCOL_ON, status);
+            collator = newCollator;
+        } else {
+            delete newCollator;
+        }
+    }
+    delete temp;
+#endif
+}
+
+/**
+ * Returns the collator to use for lenient parsing, or null if lenient parsing
  * is turned off.
 */
 const RuleBasedCollator*
 RuleBasedNumberFormat::getCollator() const
 {
-#if !UCONFIG_NO_COLLATION
-    if (!fRuleSets) {
-        return nullptr;
-    }
-
-    // lazy-evaluate the collator
-    if (collator == nullptr && lenient) {
-        // create a default collator based on the formatter's locale,
-        // then pull out that collator's rules, append any additional
-        // rules specified in the description, and create a _new_
-        // collator based on the combination of those rules
-
-        UErrorCode status = U_ZERO_ERROR;
-
-        Collator* temp = Collator::createInstance(locale, status);
-        RuleBasedCollator* newCollator;
-        if (U_SUCCESS(status) && (newCollator = dynamic_cast<RuleBasedCollator*>(temp)) != nullptr) {
-            if (lenientParseRules) {
-                UnicodeString rules(newCollator->getRules());
-                rules.append(*lenientParseRules);
-
-                newCollator = new RuleBasedCollator(rules, status);
-                // Exit if newCollator could not be created.
-                if (newCollator == nullptr) {
-                    return nullptr;
-                }
-            } else {
-                temp = nullptr;
-            }
-            if (U_SUCCESS(status)) {
-                newCollator->setAttribute(UCOL_DECOMPOSITION_MODE, UCOL_ON, status);
-                // cast away const
-                const_cast<RuleBasedNumberFormat*>(this)->collator = newCollator;
-            } else {
-                delete newCollator;
-            }
-        }
-        delete temp;
-    }
-#endif
-
     // if lenient-parse mode is off, this will be null
     // (see setLenientParseMode())
     return collator;

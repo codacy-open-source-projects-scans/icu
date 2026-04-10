@@ -442,6 +442,21 @@ public class RbnfTest extends CoreTestFmwk {
         };
 
         doTest(formatter, testData, true);
+
+        String[][] lpTestData = {
+            // NFD form of "dieciséis": s + e + combining acute + i + s
+            {"diecise\u0301is", "16"},
+            // Accent missing.
+            {"dieciseis", "16"},
+            // Mixed case with NFD accent
+            {"DIECISE\u0301IS", "16"},
+            // NFD form of "veintiséis"
+            {"veintise\u0301is", "26"},
+            // Standard NFC form should still work
+            {"diecis\u00e9is", "16"},
+        };
+
+        doParsingTest(formatter, lpTestData, true);
     }
 
     /** Perform a simple spot check on the French spellout rules */
@@ -485,6 +500,8 @@ public class RbnfTest extends CoreTestFmwk {
 
         String[][] testDataLenient = {
             {"trente-et-un", "31"},
+            {"trente  et  un", "31"},
+            {"TRENTE ET UN", "31"},
             {"un cent quatre vingt dix huit", "198"},
         };
 
@@ -2303,5 +2320,30 @@ public class RbnfTest extends CoreTestFmwk {
             // It better not be 10!
             errln("parse got " + result.longValue() + " instead of 10000000");
         }
+    }
+
+    @Test
+    public void TestTurkishSpellout() {
+        Locale locale = new Locale("tr");
+        RuleBasedNumberFormat formatter =
+                new RuleBasedNumberFormat(locale, RuleBasedNumberFormat.SPELLOUT);
+
+        String[][] testData = {
+            {"2", "iki"},
+            {"6", "alt\u0131"},
+        };
+
+        doTest(formatter, testData, true);
+
+        String[][] lpTestData = {
+            {"iki", "2"},
+            {"iK\u0130", "2"},
+            {"\u0130ki", "2"},
+            {"\u0130K\u0130", "2"},
+            {"alt\u0131", "6"},
+            {"ALTI", "6"},
+        };
+
+        doParsingTest(formatter, lpTestData, true);
     }
 }

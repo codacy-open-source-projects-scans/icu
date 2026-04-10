@@ -20,8 +20,6 @@ fr{
             "0: =%digits-ordinal-masculine=;"
         }
         SpelloutRules{
-            "%%lenient-parse:"
-            "&[last primary ignorable ] << ' ' << ',' << '-' << '\u00AD';"
             "%spellout-numbering-year:"
             "-x: moins >>;"
             "x.x: =0.0=;"

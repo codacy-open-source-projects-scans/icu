@@ -17,8 +17,6 @@ uk{
             "0: =#,##0=-$(ordinal,few{\u044F}other{\u0430})$;"
         }
         SpelloutRules{
-            "%%lenient-parse:"
-            "&[last primary ignorable ] << ' ' << ',' << '-' << '\u00AD';"
             "%spellout-numbering-year:"
             "x.x: =0.0=;"
             "0: =%spellout-numbering=;"

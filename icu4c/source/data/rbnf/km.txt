@@ -9,8 +9,6 @@ km{
             "0: \u1791\u17B8=#,##0=;"
         }
         SpelloutRules{
-            "%%lenient-parse:"
-            "&[last primary ignorable ] << ' ' << '\u200B' << '\u00AD';"
             "%spellout-numbering-year:"
             "0: =%spellout-numbering=;"
             "%spellout-numbering:"

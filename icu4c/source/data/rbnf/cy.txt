@@ -4,8 +4,6 @@
 cy{
     RBNFRules{
         SpelloutRules{
-            "%%lenient-parse:"
-            "& ' ' , ',' ;"
             "%spellout-numbering-year:"
             "x.x: =0.0=;"
             "0: =%spellout-numbering=;"

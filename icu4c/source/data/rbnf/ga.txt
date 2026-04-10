@@ -42,8 +42,6 @@ ga{
             "3600/60: <#,##0<:>>>;"
             "%duration:"
             "0: =%in-numerals=;"
-            "%%lenient-parse:"
-            "& ':' = '.' = ' ' = '-';"
         }
         OrdinalRules{
             "%digits-ordinal:"
@@ -51,8 +49,6 @@ ga{
             "0: =#,##0=\u00FA;"
         }
         SpelloutRules{
-            "%%lenient-parse:"
-            "& ' ' , ',' ;"
             "%spellout-numbering-year:"
             "-x: m\u00EDneas >>;"
             "x.x: =0.0=;"

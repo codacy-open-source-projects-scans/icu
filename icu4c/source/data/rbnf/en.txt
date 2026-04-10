@@ -25,8 +25,6 @@ en{
             "3600/60: <#,##0<:>>>;"
             "%duration:"
             "0: =%in-numerals=;"
-            "%%lenient-parse:"
-            "& ':' = '.' = ' ' = '-';"
         }
         OrdinalRules{
             "%digits-ordinal:"
@@ -34,8 +32,6 @@ en{
             "0: =#,##0=$(ordinal,one{st}two{nd}few{rd}other{th})$;"
         }
         SpelloutRules{
-            "%%lenient-parse:"
-            "&[last primary ignorable ] << ' ' << ',' << '-' << '\u00AD';"
             "%%2d-year:"
             "0: hundred;"
             "1: oh-=%spellout-numbering=;"
