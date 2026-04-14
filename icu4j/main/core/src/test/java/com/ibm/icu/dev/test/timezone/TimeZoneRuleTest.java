@@ -2250,4 +2250,24 @@ public class TimeZoneRuleTest extends CoreTestFmwk {
             errln("Fail: Exception thrown - " + e.getMessage());
         }
     }
+
+    // ICU-23325 UNTIL value in RRULE should be in ISO 8601 UTC format (e.g. 20211031T080000Z)
+    // instead of local time (e.g. 20211031T020000).
+    @Test
+    public void TestVTimeZoneRruleUntil() {
+        final VTimeZone vtz = VTimeZone.create("America/Chihuahua");
+        final long start = getUTCMillis(2020, Calendar.JANUARY, 1);
+        // RRULE lines for rule changes in 2022
+        final String rrule1 = "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU;UNTIL=20211031T080000Z";
+        final String rrule2 = "RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU;UNTIL=20220403T090000Z";
+
+        try (StringWriter sw = new StringWriter()) {
+            vtz.write(sw, start);
+            String vtzStr = sw.toString();
+            assertTrue("Should contains " + rrule1, vtzStr.contains(rrule1));
+            assertTrue("Should contains " + rrule2, vtzStr.contains(rrule2));
+        } catch (IOException e) {
+            errln("IOException: " + e.getMessage());
+        }
+    }
 }

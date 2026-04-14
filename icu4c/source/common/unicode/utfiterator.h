@@ -12,6 +12,9 @@
 #if U_SHOW_CPLUSPLUS_API || U_SHOW_CPLUSPLUS_HEADER_API || !defined(UTYPES_H)
 
 #include <iterator>
+#if __has_include(<version>)
+#include <version>
+#endif
 #if defined(__cpp_lib_ranges)
 #include <ranges>
 #endif
@@ -1785,6 +1788,9 @@ auto utfIterator(UnitIter p) {
  * @see utfStringCodePoints
  */
 template<typename CP32, UTFIllFormedBehavior behavior, typename Range>
+#if defined(__cpp_lib_ranges)
+    requires std::ranges::range<Range>
+#endif
 class UTFStringCodePoints {
     static_assert(sizeof(CP32) == 4, "CP32 must be a 32-bit type to hold a code point");
 public:
@@ -2526,6 +2532,9 @@ auto unsafeUTFIterator(UnitIter iter) {
  * @see unsafeUTFStringCodePoints
  */
 template<typename CP32, typename Range>
+#if defined(__cpp_lib_ranges)
+    requires std::ranges::range<Range>
+#endif
 class UnsafeUTFStringCodePoints {
     static_assert(sizeof(CP32) == 4, "CP32 must be a 32-bit type to hold a code point");
 public:
