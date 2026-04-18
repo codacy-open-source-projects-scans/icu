@@ -1,9 +1,10 @@
 // © 2016 and later: Unicode, Inc. and others.
 // License & terms of use: http://www.unicode.org/copyright.html
-/*********************************************************************
- * Copyright (C) 2000-2014, International Business Machines Corporation and
- * others. All Rights Reserved.
- *********************************************************************
+/*
+ **************************************************************************
+ * Copyright (C) 2000-2014, International Business Machines Corporation   *
+ * and others. All Rights Reserved.                                       *
+ **************************************************************************
  */
 package com.ibm.icu.text;
 
@@ -272,7 +273,6 @@ public class ChineseDateFormat extends SimpleDateFormat {
          */
         @Override
         @Deprecated
-        /// CLOVER:OFF
         protected Object readResolve() throws InvalidObjectException {
             if (this.getClass() != ChineseDateFormat.Field.class) {
                 throw new InvalidObjectException(
@@ -284,6 +284,5 @@ public class ChineseDateFormat extends SimpleDateFormat {
                 throw new InvalidObjectException("Unknown attribute name.");
             }
         }
-        /// CLOVER:ON
     }
 }

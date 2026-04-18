@@ -1,10 +1,11 @@
 // © 2016 and later: Unicode, Inc. and others.
 // License & terms of use: http://www.unicode.org/copyright.html
-/********************************************************************
- * COPYRIGHT:
- * Copyright (c) 2001-2016, International Business Machines Corporation and
- * others. All Rights Reserved.
- ********************************************************************/
+/*
+ **************************************************************************
+ * Copyright (c) 2001-2016, International Business Machines Corporation   *
+ * and others. All Rights Reserved.                                       *
+ **************************************************************************
+ */
 
 package com.ibm.icu.text;
 
@@ -272,7 +273,6 @@ class RBBINode {
     //        print. Print out a single node, for debugging.
     //
     // -------------------------------------------------------------------------
-    /// CLOVER:OFF
     static void printNode(RBBINode n) {
 
         if (n == null) {
@@ -293,11 +293,8 @@ class RBBINode {
         System.out.println("");
     }
 
-    /// CLOVER:ON
-
     // Print a String in a fixed field size.
     // Debugging function.
-    /// CLOVER:OFF
     static void printString(String s, int minWidth) {
         for (int i = minWidth; i < 0; i++) {
             // negative width means pad leading spaces, not fixed width.
@@ -309,21 +306,13 @@ class RBBINode {
         System.out.print(s);
     }
 
-    /// CLOVER:ON
-
-    //
     //  Print an int in a fixed size field.
     //  Debugging function.
-    //
-    /// CLOVER:OFF
     static void printInt(int i, int minWidth) {
         String s = Integer.toString(i);
         printString(s, Math.max(minWidth, s.length() + 1));
     }
 
-    /// CLOVER:ON
-
-    /// CLOVER:OFF
     static void printHex(int i, int minWidth) {
         String s = Integer.toString(i, 16);
         String leadingZeroes = "00000".substring(0, Math.max(0, 5 - s.length()));
@@ -331,14 +320,11 @@ class RBBINode {
         printString(s, minWidth);
     }
 
-    /// CLOVER:ON
-
     // -------------------------------------------------------------------------
     //
     //        print. Print out the tree of nodes rooted at "this"
     //
     // -------------------------------------------------------------------------
-    /// CLOVER:OFF
     void printTree(boolean printHeading) {
         if (printHeading) {
             System.out.println(
@@ -359,6 +345,4 @@ class RBBINode {
             }
         }
     }
-    /// CLOVER:ON
-
 }
